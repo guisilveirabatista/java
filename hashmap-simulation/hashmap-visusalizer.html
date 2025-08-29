@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java HashMap Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #764ba2;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        input {
+            padding: 10px 15px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: white;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.1);
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(118, 75, 162, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .clear-btn {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+        
+        .visualization {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .input-display {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .input-display h3 {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .hash-calculation {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .hash-step {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .buckets-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .buckets-container h3 {
+            color: #764ba2;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+        
+        .buckets {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .bucket {
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bucket.highlight {
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border-color: #764ba2;
+            animation: pulse 0.6s;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .bucket-index {
+            background: #667eea;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-right: 15px;
+            min-width: 40px;
+            text-align: center;
+        }
+        
+        .bucket-content {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex: 1;
+        }
+        
+        .entry {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            font-family: 'Courier New', monospace;
+            animation: slideIn 0.3s;
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .entry:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+        }
+        
+        @keyframes slideIn {
+            from { 
+                opacity: 0; 
+                transform: translateX(-20px);
+            }
+            to { 
+                opacity: 1; 
+                transform: translateX(0);
+            }
+        }
+        
+        .arrow {
+            color: #764ba2;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        
+        .stats {
+            margin-top: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #764ba2;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #ffecd2, #fcb69f);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+            color: #333;
+        }
+        
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #d84315;
+        }
+        
+        .info-box p {
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗂️ Java HashMap Visualization</h1>
+        
+        <div class="controls">
+            <div class="input-group">
+                <input type="text" id="keyInput" placeholder="Enter key (e.g., name)" />
+                <input type="text" id="valueInput" placeholder="Enter value (e.g., John)" />
+                <button onclick="addEntry()">Put Entry</button>
+            </div>
+            <button class="clear-btn" onclick="clearMap()">Clear All</button>
+        </div>
+        
+        <div class="visualization">
+            <div class="input-display">
+                <h3>Hash Calculation</h3>
+                <div id="hashCalculation" class="hash-calculation">
+                    <p>Ready to calculate hash...</p>
+                </div>
+            </div>
+            
+            <div class="buckets-container">
+                <h3>HashMap Buckets (Array Size: 8)</h3>
+                <div id="buckets" class="buckets"></div>
+            </div>
+        </div>
+        
+        <div class="stats" id="stats">
+            <div class="stat">
+                <div class="stat-value" id="totalEntries">0</div>
+                <div class="stat-label">Total Entries</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="loadFactor">0%</div>
+                <div class="stat-label">Load Factor</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="collisions">0</div>
+                <div class="stat-label">Collisions</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="emptyBuckets">8</div>
+                <div class="stat-label">Empty Buckets</div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <h3>How HashMap Works:</h3>
+            <p>
+                1. <strong>Hashing:</strong> When you add a key-value pair, the key's hashCode() is calculated.<br>
+                2. <strong>Index Calculation:</strong> The hash is used to determine which bucket (array index) to use: index = hash & (array_length - 1)<br>
+                3. <strong>Collision Handling:</strong> If multiple keys hash to the same bucket, they're stored as a linked list (or tree for many collisions).<br>
+                4. <strong>Retrieval:</strong> To get a value, the key is hashed again to find the bucket, then the list is searched for the exact key.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        const BUCKET_SIZE = 8;
+        let hashMap = new Array(BUCKET_SIZE).fill(null).map(() => []);
+        let totalEntries = 0;
+        let collisionCount = 0;
+        
+        function initializeBuckets() {
+            const bucketsDiv = document.getElementById('buckets');
+            bucketsDiv.innerHTML = '';
+            
+            for (let i = 0; i < BUCKET_SIZE; i++) {
+                const bucket = document.createElement('div');
+                bucket.className = 'bucket';
+                bucket.id = `bucket-${i}`;
+                
+                const index = document.createElement('div');
+                index.className = 'bucket-index';
+                index.textContent = i;
+                
+                const content = document.createElement('div');
+                content.className = 'bucket-content';
+                content.id = `bucket-content-${i}`;
+                
+                if (hashMap[i].length === 0) {
+                    content.innerHTML = '<span style="color: #999;">Empty</span>';
+                }
+                
+                bucket.appendChild(index);
+                bucket.appendChild(content);
+                bucketsDiv.appendChild(bucket);
+            }
+        }
+        
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash);
+        }
+        
+        function addEntry() {
+            const key = document.getElementById('keyInput').value.trim();
+            const value = document.getElementById('valueInput').value.trim();
+            
+            if (!key || !value) {
+                alert('Please enter both key and value!');
+                return;
+            }
+            
+            const hash = simpleHash(key);
+            const index = hash % BUCKET_SIZE;
+            
+            // Show hash calculation
+            const calcDiv = document.getElementById('hashCalculation');
+            calcDiv.innerHTML = `
+                <div class="hash-step">
+                    <strong>Key:</strong> "${key}"
+                </div>
+                <div class="hash-step">
+                    <strong>Hash Code:</strong> ${hash}
+                </div>
+                <div class="hash-step">
+                    <strong>Bucket Index:</strong> ${hash} % ${BUCKET_SIZE} = ${index}
+                </div>
+            `;
+            
+            // Check for existing key
+            let existingIndex = -1;
+            for (let i = 0; i < hashMap[index].length; i++) {
+                if (hashMap[index][i].key === key) {
+                    existingIndex = i;
+                    break;
+                }
+            }
+            
+            if (existingIndex !== -1) {
+                hashMap[index][existingIndex] = { key, value };
+            } else {
+                if (hashMap[index].length > 0) {
+                    collisionCount++;
+                }
+                hashMap[index].push({ key, value });
+                totalEntries++;
+            }
+            
+            updateBucket(index);
+            highlightBucket(index);
+            updateStats();
+            
+            // Clear inputs
+            document.getElementById('keyInput').value = '';
+            document.getElementById('valueInput').value = '';
+        }
+        
+        function updateBucket(index) {
+            const content = document.getElementById(`bucket-content-${index}`);
+            
+            if (hashMap[index].length === 0) {
+                content.innerHTML = '<span style="color: #999;">Empty</span>';
+            } else {
+                content.innerHTML = hashMap[index]
+                    .map((entry, i) => {
+                        const arrow = i > 0 ? '<span class="arrow"> → </span>' : '';
+                        return `${arrow}<div class="entry">${entry.key}: ${entry.value}</div>`;
+                    })
+                    .join('');
+            }
+        }
+        
+        function highlightBucket(index) {
+            // Remove previous highlights
+            document.querySelectorAll('.bucket').forEach(b => b.classList.remove('highlight'));
+            
+            // Add highlight to current bucket
+            const bucket = document.getElementById(`bucket-${index}`);
+            bucket.classList.add('highlight');
+            
+            setTimeout(() => {
+                bucket.classList.remove('highlight');
+            }, 1000);
+        }
+        
+        function updateStats() {
+            document.getElementById('totalEntries').textContent = totalEntries;
+            document.getElementById('loadFactor').textContent = 
+                Math.round((totalEntries / BUCKET_SIZE) * 100) + '%';
+            document.getElementById('collisions').textContent = collisionCount;
+            
+            const emptyBuckets = hashMap.filter(bucket => bucket.length === 0).length;
+            document.getElementById('emptyBuckets').textContent = emptyBuckets;
+        }
+        
+        function clearMap() {
+            hashMap = new Array(BUCKET_SIZE).fill(null).map(() => []);
+            totalEntries = 0;
+            collisionCount = 0;
+            initializeBuckets();
+            updateStats();
+            document.getElementById('hashCalculation').innerHTML = 
+                '<p>Ready to calculate hash...</p>';
+        }
+        
+        // Enter key support
+        document.getElementById('keyInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('valueInput').focus();
+            }
+        });
+        
+        document.getElementById('valueInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addEntry();
+            }
+        });
+        
+        // Initialize on load
+        initializeBuckets();
+        updateStats();
+    </script>
+</body>
+</html>
