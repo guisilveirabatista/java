@@ -117,6 +117,19 @@
       .runtime-grid .wide{grid-column:auto}
     }
       .paused-badge{display:inline-flex; align-items:center; gap:6px; margin-left:8px; font-size:11px; padding:3px 8px; border-radius:999px; background:#0e1635; border:1px solid #293875; color:#cfe0ff}
+      /* Help buttons & modal */
+    .help{margin-left:8px; background:#0e1635; border:1px solid #2a3775; color:#cfe0ff; border-radius:999px; padding:2px 8px; font-size:11px; cursor:pointer}
+    .help:hover{background:#132059}
+    .modal{position:fixed; inset:0; background:rgba(4,8,20,.6); display:none; align-items:center; justify-content:center; z-index:1000}
+    .modal.show{display:flex}
+    .modal-card{background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid #27346d; color:var(--ink); width:min(720px, 92vw); border-radius:14px; box-shadow:var(--shadow)}
+    .modal-head{display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #223063}
+    .modal-head h3{margin:0; font-size:16px}
+    .modal-body{padding:14px 16px; font-size:14px; line-height:1.5}
+    .modal-body ul{margin:.4em 0 .2em 1.2em}
+    .modal-foot{display:flex; justify-content:flex-end; padding:12px 16px; border-top:1px solid #223063}
+    .close-btn{background:#1a2550; color:#cfe0ff; border:1px solid #25306a; border-radius:10px; padding:8px 12px; cursor:pointer}
+    .paused-badge{display:inline-flex; align-items:center; gap:6px; margin-left:8px; font-size:11px; padding:3px 8px; border-radius:999px; background:#0e1635; border:1px solid #293875; color:#cfe0ff}
   </style>
 </head>
 <body>
@@ -138,7 +151,7 @@
     <div class="main">
       <!-- LEFT: Class Loading Pipeline -->
       <div class="card loader" id="loaderCol">
-        <h2>Class Loading</h2>
+        <h2>Class Loading <button class="help" data-help="classLoading" aria-label="Explain Class Loading">?</button></h2>
         <div class="stage" id="classSource"><span class="badge">.class</span> Class file found</div>
         <div class="stage" id="classLoader"><span class="badge">Loader</span> Loading & linking</div>
         <div class="stage" id="verifier"><span class="badge">Verify</span> Bytecode verification</div>
@@ -149,25 +162,25 @@
 
       <!-- CENTER: Runtime Data Areas -->
       <div class="card">
-        <h2>Runtime Data Areas</h2>
+        <h2>Runtime Data Areas <button class="help" data-help="runtimeData" aria-label="Explain Runtime Data Areas">?</button></h2>
         <div class="runtime-grid">
           <div class="method-area">
-            <div class="section-title">Method Area (metaspace)</div>
+            <div class="section-title">Method Area (metaspace) <button class="help" data-help="methodArea" aria-label="Explain Method Area">?</button></div>
             <div class="method-table" id="methodArea">
               <!-- methods injected dynamically -->
             </div>
           </div>
           <div class="heap">
-            <div class="section-title">Heap (young/old gen simplified)</div>
+            <div class="section-title">Heap (young/old gen simplified) <button class="help" data-help="heap" aria-label="Explain Heap">?</button></div>
             <div class="heap-area" id="heapArea"></div>
           </div>
           <div class="wide stacks">
             <div class="stackcol card">
-              <div class="section-title">Thread: main</div>
+              <div class="section-title">Thread: main <button class="help" data-help="threadStack" aria-label="Explain Java Thread Stack">?</button></div>
               <div class="frames" id="mainStack"></div>
             </div>
             <div class="stackcol card">
-              <div class="section-title">Bytecode Viewer</div>
+              <div class="section-title">Bytecode Viewer <button class="help" data-help="bytecodeViewer" aria-label="Explain Bytecode Viewer">?</button></div>
               <div class="method" id="bytecodeCard">
                 <div class="hdr"><span>main(String[])</span> <span class="hot" id="hotness">interpreter</span></div>
                 <ol class="bytecode" id="bytecode"></ol>
@@ -179,14 +192,28 @@
 
       <!-- RIGHT: Engine & Notes -->
       <div class="card engine">
-        <h2>Execution Engine</h2>
+        <h2>Execution Engine <button class="help" data-help="engine" aria-label="Explain Execution Engine">?</button></h2>
         <div class="unit" id="interpreter"><strong>Interpreter</strong><div class="hint">Decodes bytecodes one by one</div></div>
         <div class="unit" id="jitUnit"><strong>JIT Compiler</strong><div class="hint">Hot methods compiled to native code</div></div>
         <div class="unit" id="gcUnit"><strong>Garbage Collector</strong><div class="hint">Reclaims unreachable objects</div></div>
         <div class="unit" id="osThread"><strong>OS Threads</strong><div class="hint">Java threads map to OS threads</div></div>
         <div class="card notes" style="margin-top:10px">
-          <h2>What’s happening</h2>
+          <h2>What’s happening <button class="help" data-help="notes" aria-label="Explain What’s happening panel">?</button></h2>
           <div id="notes" class="callout">Press <strong>Play</strong> or <strong>Step</strong> to watch the JVM load classes, execute bytecode, JIT hot paths, and collect garbage.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help modal -->
+    <div class="modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 id="helpTitle">Help</h3>
+          <button class="close-btn" id="helpClose" aria-label="Close">Close</button>
+        </div>
+        <div class="modal-body" id="helpBody">Loading…</div>
+        <div class="modal-foot">
+          <button class="close-btn" id="helpOk">OK</button>
         </div>
       </div>
     </div>
@@ -224,6 +251,7 @@
     }
 
     function flash(el, klass = 'active', ms = 700){
+      if(!el) return;
       el.classList.add(klass);
       setTimeout(()=> el.classList.remove(klass), ms);
     }
@@ -231,9 +259,65 @@
     let currentNote = ''; let isPaused = false;
 
     function setNote(html){ currentNote = html; renderNote(); }
-    function renderNote(){ const n = $('#notes'); if(!n) return; n.innerHTML = currentNote + (isPaused ? ' <span class="paused-badge">⏸ Paused</span>' : ''); }
+    function renderNote(){ const n = $('#notes'); if(!n) return; n.innerHTML = currentNote + (isPaused ? ' <span class=\"paused-badge\">⏸ Paused</span>' : ''); }
 
     function createEl(tag, attrs = {}, html = ""){ const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v])=> el.setAttribute(k,v)); el.innerHTML = html; return el; }
+
+    // --- Help content -------------------------------------------------------
+    const HELP = {
+      classLoading: {
+        title: 'Class Loading',
+        body: `The JVM locates and prepares classes before execution:
+          <ul>
+            <li><b>Loading</b>: Find <code>.class</code> bytes via Bootstrap/App/Custom loaders.</li>
+            <li><b>Linking</b>: Verify bytecode safety, prepare static storage, and (optionally) resolve references.</li>
+            <li><b>Initialization</b>: Run static initializers and load constants.</li>
+            <li><b>JNI</b>: Optionally bind native methods.</li>
+          </ul>`
+      },
+      runtimeData: {
+        title: 'Runtime Data Areas',
+        body: `These are the memory regions the JVM uses while running your program: method area (metaspace), heap, and per‑thread stacks.`
+      },
+      methodArea: {
+        title: 'Method Area (Metaspace)',
+        body: `Stores class metadata (fields, methods), bytecode, and constant pools. Conceptually shared across threads.`
+      },
+      heap: {
+        title: 'Heap',
+        body: `Where all objects live. Managed by the garbage collector. Implementations usually split it into generations (young/old) to collect short‑lived objects efficiently.`
+      },
+      threadStack: {
+        title: 'Java Thread Stack',
+        body: `Each Java thread has a stack composed of <b>frames</b>. A frame holds local variables and an operand stack for the current method call. Frames are pushed on call and popped on return.`
+      },
+      bytecodeViewer: {
+        title: 'Bytecode Viewer',
+        body: `Shows the instructions for the current method. The active instruction (~program counter) is highlighted during interpretation.`
+      },
+      engine: {
+        title: 'Execution Engine',
+        body: `<ul>
+          <li><b>Interpreter</b>: Decodes and runs bytecodes one by one.</li>
+          <li><b>JIT Compiler</b>: Detects hot methods and compiles them into native code.</li>
+          <li><b>Garbage Collector</b>: Reclaims unreachable objects at safepoints.</li>
+          <li><b>OS Threads</b>: Java threads are scheduled by the OS; the JVM coordinates safepoints and transitions.</li>
+        </ul>`
+      },
+      notes: {
+        title: "What's happening",
+        body: `Live narration of the current step. When you pause, the text stays so you can read it.`
+      }
+    };
+
+    function openHelp(key){
+      const m = $('#helpModal'); const t = $('#helpTitle'); const b = $('#helpBody');
+      const item = HELP[key] || {title:'Help', body:'No help available for this section.'};
+      if(t) t.textContent = item.title;
+      if(b) b.innerHTML = item.body;
+      if(m) m.classList.add('show');
+    }
+    function closeHelp(){ const m = $('#helpModal'); if(m) m.classList.remove('show'); }
 
     // --- JVM Model (simplified) --------------------------------------------
     const methodArea = $('#methodArea');
@@ -445,6 +529,19 @@
       const stepBtn = $('#step');
       if(stepBtn){ stepBtn.disabled = playing || state.step >= steps.length; }
     }
+
+    // Help handlers
+    document.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.help');
+      if(btn){
+        const key = btn.getAttribute('data-help');
+        openHelp(key);
+      }
+    });
+    const helpClose = $('#helpClose'); if(helpClose) helpClose.addEventListener('click', closeHelp);
+    const helpOk = $('#helpOk'); if(helpOk) helpOk.addEventListener('click', closeHelp);
+    const helpModal = $('#helpModal'); if(helpModal) helpModal.addEventListener('click', (e)=>{ if(e.target.id==='helpModal') closeHelp(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeHelp(); });
 
     $('#play').addEventListener('click', ()=>{
       if(playing){
