@@ -1,0 +1,535 @@
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+// --- Utility helpers
+const uid = () => Math.random().toString(36).slice(2, 9);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Pretty print JSON safely
+function pretty(data: any) {
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
+}
+
+// Small badge
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium">
+      {children}
+    </span>
+  );
+}
+
+// Toggle component
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        className="peer hidden"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="h-5 w-9 rounded-full bg-gray-300 peer-checked:bg-emerald-500 relative transition-colors">
+        <span className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-all peer-checked:left-4" />
+      </span>
+      <span className="text-sm text-gray-700">{label}</span>
+    </label>
+  );
+}
+
+// Slider component
+function Slider({ label, min, max, step, value, onChange, suffix }: { label: string; min: number; max: number; step?: number; value: number; onChange: (v: number) => void; suffix?: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-700">{label}</span>
+        <span className="font-mono tabular-nums">{value}{suffix}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step ?? 1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </div>
+  );
+}
+
+// Method chip
+const MethodChip = ({ method }: { method: string }) => {
+  const color = {
+    GET: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    POST: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    PUT: "bg-amber-100 text-amber-700 border-amber-200",
+    DELETE: "bg-rose-100 text-rose-700 border-rose-200",
+  }[method as keyof any] || "bg-gray-100 text-gray-700 border-gray-200";
+  return <span className={`rounded px-2 py-0.5 text-xs font-semibold border ${color}`}>{method}</span>;
+};
+
+// Services catalog
+const CATALOG = [
+  {
+    name: "User Service",
+    color: "border-indigo-300",
+    routes: [
+      { method: "GET", path: "/users" },
+      { method: "GET", path: "/users/:id" },
+      { method: "POST", path: "/users" },
+    ],
+    make: (req: Req) => {
+      if (req.method === "GET" && req.path === "/users")
+        return { users: [{ id: 1, name: "Ada" }, { id: 2, name: "Linus" }] };
+      if (req.method === "GET" && req.path.startsWith("/users/")) {
+        const id = Number(req.path.split("/")[2]);
+        return { id, name: id === 1 ? "Ada" : id === 2 ? "Linus" : "Unknown" };
+      }
+      if (req.method === "POST" && req.path === "/users") {
+        return { id: Math.floor(Math.random() * 1000), ...(req.body || {}) };
+      }
+      return { message: "Not found" };
+    },
+  },
+  {
+    name: "Order Service",
+    color: "border-emerald-300",
+    routes: [
+      { method: "GET", path: "/orders" },
+      { method: "POST", path: "/orders" },
+      { method: "DELETE", path: "/orders/:id" },
+    ],
+    make: (req: Req) => {
+      if (req.method === "GET" && req.path === "/orders")
+        return { orders: [{ id: "A100", total: 49.9 }, { id: "B200", total: 19.5 }] };
+      if (req.method === "POST" && req.path === "/orders") {
+        return { id: "O" + Math.floor(Math.random() * 1000), status: "PLACED", ...(req.body || {}) };
+      }
+      if (req.method === "DELETE" && req.path.startsWith("/orders/")) {
+        return { ok: true };
+      }
+      return { message: "Not found" };
+    },
+  },
+  {
+    name: "Inventory Service",
+    color: "border-amber-300",
+    routes: [
+      { method: "GET", path: "/inventory" },
+      { method: "GET", path: "/inventory/:sku" },
+    ],
+    make: (req: Req) => {
+      if (req.method === "GET" && req.path === "/inventory")
+        return { items: [{ sku: "ABC", stock: 12 }, { sku: "XYZ", stock: 0 }] };
+      if (req.method === "GET" && req.path.startsWith("/inventory/")) {
+        const sku = req.path.split("/")[2];
+        return { sku, stock: Math.floor(Math.random() * 20) };
+      }
+      return { message: "Not found" };
+    },
+  },
+];
+
+// Route matcher to pick a service based on method+path
+function routeToService(method: string, path: string) {
+  for (const svc of CATALOG) {
+    for (const r of svc.routes) {
+      const pat = r.path.replace(/:[^/]+/g, "[^/]+");
+      const rx = new RegExp("^" + pat + "$");
+      if (rx.test(path) && r.method === method) return svc.name;
+    }
+  }
+  return "Unknown";
+}
+
+// Types
+type Req = {
+  id: string;
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  path: string;
+  body?: any;
+  headers: Record<string, string>;
+};
+
+type Res = {
+  status: number;
+  data: any;
+  headers: Record<string, string>;
+};
+
+// Main component
+export default function ApiVisualizer() {
+  // Controls
+  const [method, setMethod] = useState<Req["method"]>("GET");
+  const [path, setPath] = useState("/users");
+  const [body, setBody] = useState("{\n  \"name\": \"New User\"\n}");
+
+  const [auth, setAuth] = useState(true); // require auth at gateway
+  const [sendToken, setSendToken] = useState(true); // client sends Authorization header
+  const [cacheEnabled, setCacheEnabled] = useState(true);
+  const [retry, setRetry] = useState(true);
+  const [latency, setLatency] = useState(400); // ms
+  const [failure, setFailure] = useState(10); // % at service
+  const [rateLimit, setRateLimit] = useState(5); // per 10s window
+
+  // State
+  const [logs, setLogs] = useState<string[]>([]);
+  const [response, setResponse] = useState<Res | null>(null);
+  const [inFlight, setInFlight] = useState<string | null>(null); // request id animating
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [serviceName, setServiceName] = useState<string>(routeToService(method, path));
+
+  const addLog = (line: string) => setLogs((l) => [`${new Date().toLocaleTimeString()} ${line}`, ...l]);
+
+  useEffect(() => {
+    setServiceName(routeToService(method, path));
+  }, [path, method]);
+
+  // Cache + rate limit state
+  const cache = useRef(new Map<string, Res>());
+  const rateWindow = useRef({ start: Date.now(), count: 0 });
+
+  // Derived packet positions for animation (client->gateway->service->gateway->client)
+  const positions = useMemo(() => {
+    return [
+      { x: 80, y: 60 }, // client
+      { x: 380, y: 60 }, // gateway
+      { x: 700, y: 60 }, // service cluster center; we will nudge per service box
+      { x: 380, y: 140 }, // gateway (back)
+      { x: 80, y: 140 }, // client (response)
+    ];
+  }, []);
+
+  // Send request pipeline
+  async function send() {
+    setResponse(null);
+
+    const id = uid();
+    setInFlight(id);
+    setStep(0);
+    addLog(`→ Building request ${id}`);
+
+    let req: Req;
+    try {
+      req = {
+        id,
+        method,
+        path,
+        body: method === "GET" || method === "DELETE" ? undefined : JSON.parse(body || "{}"),
+        headers: sendToken ? { Authorization: "Bearer demo-token" } : {},
+      };
+    } catch (e: any) {
+      addLog(`⚠️ Body JSON parse error: ${String(e.message || e)}`);
+      setInFlight(null);
+      return;
+    }
+
+    // Move to gateway
+    setStep(1);
+    await sleep(200);
+    addLog(`🌐 Arrived at API Gateway (${req.method} ${req.path})`);
+
+    // Auth check
+    if (auth && !req.headers.Authorization) {
+      addLog("🔒 Missing Authorization header → 401");
+      const res401 = { status: 401, data: { error: "Unauthorized" }, headers: { "www-authenticate": "Bearer" } } as Res;
+      setResponse(res401);
+      setStep(4);
+      setInFlight(null);
+      return;
+    }
+
+    if (!auth) {
+      addLog("(Auth disabled in demo)");
+    }
+
+    // Rate limit per 10s window
+    const now = Date.now();
+    if (now - rateWindow.current.start > 10_000) {
+      rateWindow.current = { start: now, count: 0 };
+    }
+    rateWindow.current.count++;
+    if (rateWindow.current.count > rateLimit) {
+      addLog("⛔ Rate limit exceeded → 429");
+      const res429 = { status: 429, data: { error: "Too Many Requests" }, headers: { "retry-after": "2" } } as Res;
+      setResponse(res429);
+      setStep(4);
+      setInFlight(null);
+      return;
+    }
+
+    // Cache lookup (GET only)
+    const cacheKey = `${req.method} ${req.path}`;
+    if (cacheEnabled && req.method === "GET" && cache.current.has(cacheKey)) {
+      addLog("⚡ Cache hit at gateway → 200 (from cache)");
+      const cached = cache.current.get(cacheKey)!;
+      setResponse({ ...cached, headers: { ...cached.headers, "x-cache": "HIT" } });
+      setStep(4);
+      setInFlight(null);
+      return;
+    }
+
+    // Route to service
+    const svcName = routeToService(req.method, req.path);
+    setServiceName(svcName);
+    setStep(2);
+    addLog(`📦 Routed to ${svcName}`);
+
+    // Simulate service work with failure rate + optional retries (idempotent: GET)
+    const attemptServiceCall = async (attempt: number): Promise<Res> => {
+      await sleep(latency);
+      const failed = Math.random() * 100 < failure;
+      if (failed) {
+        addLog(`💥 ${svcName} failed (500) [attempt ${attempt}]`);
+        return { status: 500, data: { error: "Internal Server Error" }, headers: {} };
+      }
+      const maker = CATALOG.find((s) => s.name === svcName)?.make;
+      const data = (maker ? maker(req) : { ok: true });
+      return { status: 200, data, headers: { "content-type": "application/json" } };
+    };
+
+    let res = await attemptServiceCall(1);
+
+    if (res.status >= 500 && retry && req.method === "GET") {
+      // Exponential backoff retry up to 2x
+      for (let i = 2; i <= 3 && res.status >= 500; i++) {
+        const backoff = Math.min(1200, 200 * 2 ** (i - 2));
+        addLog(`🕒 Retrying in ${backoff}ms...`);
+        await sleep(backoff);
+        res = await attemptServiceCall(i);
+      }
+    }
+
+    setStep(3);
+    await sleep(180);
+    if (res.status === 200 && cacheEnabled && req.method === "GET") {
+      cache.current.set(cacheKey, res);
+      addLog("🗄️ Stored response in gateway cache");
+    }
+
+    setResponse(res);
+    setStep(4);
+    setInFlight(null);
+    addLog(`⬅️ Response ${res.status} delivered to client`);
+  }
+
+  // Packet (animated dot)
+  const Packet = () => (
+    <AnimatePresence>
+      {inFlight && (
+        <motion.div
+          key={inFlight}
+          initial={{ x: positions[0].x, y: positions[0].y, opacity: 0.9 }}
+          animate={{ x: positions[step].x, y: positions[step].y, opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ type: "spring", stiffness: 110, damping: 14 }}
+          className="pointer-events-none absolute h-4 w-4 rounded-full shadow-lg"
+          style={{ background: step < 3 ? "#4f46e5" : "#10b981", boxShadow: "0 8px 20px rgba(0,0,0,0.25)" }}
+          aria-hidden
+        />
+      )}
+    </AnimatePresence>
+  );
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-b from-slate-50 to-white text-slate-800">
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        {/* Header */}
+        <header className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Interactive API Visualizer</h1>
+            <p className="text-sm text-slate-600">See how requests flow from a client → API Gateway → microservices, with auth, rate‑limiting, caching and retries.</p>
+          </div>
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            className="rounded-xl border bg-white px-3 py-2 text-sm shadow-sm hover:shadow"
+          >
+            Made for you ✨
+          </a>
+        </header>
+
+        {/* Controls */}
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-[1.2fr_1fr]">
+          <div className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as any)}
+                className="rounded-xl border px-2 py-1 text-sm"
+              >
+                {(["GET", "POST", "PUT", "DELETE"] as const).map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <input
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                className="w-72 rounded-xl border px-3 py-1.5 text-sm font-mono"
+                placeholder="/users"
+                list="suggested-paths"
+              />
+              <datalist id="suggested-paths">
+                <option>/users</option>
+                <option>/users/1</option>
+                <option>/orders</option>
+                <option>/orders/123</option>
+                <option>/inventory</option>
+                <option>/inventory/ABC</option>
+              </datalist>
+              <button
+                onClick={send}
+                className="ml-auto inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-700"
+                aria-label="Send request"
+              >
+                Send
+              </button>
+            </div>
+            {(method === "POST" || method === "PUT") && (
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="h-32 w-full resize-y rounded-xl border p-3 font-mono text-sm"
+                spellCheck={false}
+                aria-label="Request body JSON"
+              />
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <Toggle label="Require Auth" checked={auth} onChange={setAuth} />
+              <Toggle label="Send token" checked={sendToken} onChange={setSendToken} />
+              <Toggle label="Cache (GET)" checked={cacheEnabled} onChange={setCacheEnabled} />
+              <Toggle label="Retry 5xx (GET)" checked={retry} onChange={setRetry} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="grid gap-3">
+              <Slider label="Latency" min={0} max={2000} step={50} value={latency} onChange={setLatency} suffix="ms" />
+              <Slider label="Failure rate" min={0} max={80} step={1} value={failure} onChange={setFailure} suffix="%" />
+              <Slider label="Rate limit / 10s" min={1} max={20} value={rateLimit} onChange={setRateLimit} />
+            </div>
+          </div>
+        </section>
+
+        {/* Diagram + Explain */}
+        <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-[1.2fr_1fr]">
+          <div className="relative rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-4">
+              {/* Client */}
+              <div className="rounded-2xl border p-4">
+                <div className="mb-1 flex items-center justify-between">
+                  <h3 className="font-semibold">Client</h3>
+                  <Badge>Browser / App</Badge>
+                </div>
+                <p className="text-xs text-slate-600">Builds HTTP request and shows the response.</p>
+                <div className="mt-3 rounded-xl bg-slate-50 p-2 text-xs font-mono">
+                  <div><MethodChip method={method} /> <span className="ml-2">{path}</span></div>
+                  <div className="mt-1 text-slate-500">Headers: {sendToken ? "Authorization: Bearer ..." : "(none)"}</div>
+                </div>
+              </div>
+
+              {/* Gateway */}
+              <div className="rounded-2xl border p-4">
+                <div className="mb-1 flex items-center justify-between">
+                  <h3 className="font-semibold">API Gateway</h3>
+                  <Badge>Policies</Badge>
+                </div>
+                <ul className="list-disc pl-5 text-xs text-slate-700">
+                  <li>Auth check (401)</li>
+                  <li>Rate limit (429)</li>
+                  <li>Cache GET (HIT/MISS)</li>
+                  <li>Routing to service</li>
+                </ul>
+              </div>
+
+              {/* Services */}
+              <div className="rounded-2xl border p-4">
+                <div className="mb-1 flex items-center justify-between">
+                  <h3 className="font-semibold">Services</h3>
+                  <Badge>Microservices</Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {CATALOG.map((s) => (
+                    <div key={s.name} className={`rounded-xl border ${s.color} p-2`}>
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{s.name}</span>
+                        {serviceName === s.name && <span className="text-emerald-600 text-xs">● active</span>}
+                      </div>
+                      <div className="mt-1 grid grid-cols-1 gap-1 text-xs font-mono">
+                        {s.routes.map((r) => (
+                          <div key={r.method + r.path} className="flex items-center gap-2">
+                            <MethodChip method={r.method} />
+                            <span>{r.path}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Animated packet */}
+            <div className="relative h-40">
+              <Packet />
+              <div className="absolute left-[60px] top-[50px] h-2 w-80 rounded bg-gradient-to-r from-indigo-200 to-indigo-300" />
+              <div className="absolute left-[340px] top-[50px] h-2 rounded bg-gradient-to-r from-indigo-200 to-indigo-300" style={{ width: 300 }} />
+              <div className="absolute left-[340px] top-[130px] h-2 w-80 rounded bg-gradient-to-l from-emerald-200 to-emerald-300" />
+              <div className="absolute left-[60px] top-[130px] h-2 w-80 rounded bg-gradient-to-l from-emerald-200 to-emerald-300" />
+            </div>
+          </div>
+
+          {/* What's happening */}
+          <div className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold">What’s happening</h3>
+              <button
+                className="rounded-lg border px-2 py-1 text-xs hover:bg-slate-50"
+                onClick={() => setLogs([])}
+              >
+                Clear
+              </button>
+            </div>
+            <div className="h-56 overflow-auto rounded-xl bg-slate-50 p-3 text-xs font-mono leading-relaxed">
+              {logs.length === 0 ? (
+                <p className="text-slate-500">Click <strong>Send</strong> to watch the flow…</p>
+              ) : (
+                logs.map((line, i) => <div key={i}>{line}</div>)
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Response */}
+        <section className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="font-semibold">Client Response</h3>
+            {response && (
+              <div className="flex items-center gap-2 text-sm">
+                <Badge>Status: {response.status}</Badge>
+                <Badge>{response.headers["x-cache"] ? response.headers["x-cache"] : "LIVE"}</Badge>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-xl border bg-slate-50 p-3">
+              <div className="text-xs font-mono whitespace-pre-wrap">{response ? pretty(response.data) : "(no response yet)"}</div>
+            </div>
+            <div className="rounded-xl border bg-slate-50 p-3">
+              <div className="text-xs font-mono whitespace-pre-wrap">{response ? pretty(response.headers) : "(headers)"}</div>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer tips */}
+        <footer className="mt-6 text-xs text-slate-500">
+          Try: <code className="rounded bg-slate-100 px-1 py-0.5">GET /users</code>, <code className="rounded bg-slate-100 px-1 py-0.5">GET /users/1</code>, <code className="rounded bg-slate-100 px-1 py-0.5">POST /orders</code>, <code className="rounded bg-slate-100 px-1 py-0.5">GET /inventory/ABC</code>. Toggle failure rate to see retries.
+        </footer>
+      </div>
+    </div>
+  );
+}
