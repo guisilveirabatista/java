@@ -395,13 +395,11 @@
         state.step = i+1;
       }
       // If we reached the end naturally, stop and lock controls appropriately
-      if(state.step>=steps.length){ playing = false; isPaused = false; }
+      if(state.step>=steps.length){
+        playing = false;
+        isPaused = false;
+      }
       updateControls();
-      renderNote();
-    }
-      $('#play').disabled = state.step>=steps.length;
-      $('#step').disabled  = state.step>=steps.length;
-      playing = false;
       renderNote();
     }
 
@@ -426,7 +424,6 @@
       renderBytecodeViewer();
       const sv = $('#speedVal'); const si = $('#speed'); if(sv && si){ speed = Number(si.value); sv.textContent = speed.toFixed(1)+'×'; }
       updateControls();
-    }
     }
 
     function renderBytecodeViewer(){
