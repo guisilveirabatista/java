@@ -116,6 +116,7 @@
       .runtime-grid{grid-template-columns:1fr;}
       .runtime-grid .wide{grid-column:auto}
     }
+      .paused-badge{display:inline-flex; align-items:center; gap:6px; margin-left:8px; font-size:11px; padding:3px 8px; border-radius:999px; background:#0e1635; border:1px solid #293875; color:#cfe0ff}
   </style>
 </head>
 <body>
@@ -129,7 +130,7 @@
         <button class="btn" id="play">▶ Play</button>
         <button class="btn secondary" id="step">▦ Step</button>
         <button class="btn ghost" id="reset">↺ Reset</button>
-        <span class="pill"><span>Speed</span> <input id="speed" type="range" min="0.5" max="2.5" value="1" step="0.1"/></span>
+        <span class="pill"><span>Speed</span> <input id="speed" type="range" min="0.1" max="2.5" value="1" step="0.1"/> <span id="speedVal" class="kbd">1.0×</span></span>
         <button class="btn secondary" id="gcNow">🧹 GC Now</button>
       </div>
     </header>
@@ -227,7 +228,10 @@
       setTimeout(()=> el.classList.remove(klass), ms);
     }
 
-    function setNote(html){ $('#notes').innerHTML = html; }
+    let currentNote = ''; let isPaused = false;
+
+    function setNote(html){ currentNote = html; renderNote(); }
+    function renderNote(){ const n = $('#notes'); if(!n) return; n.innerHTML = currentNote + (isPaused ? ' <span class="paused-badge">⏸ Paused</span>' : ''); }
 
     function createEl(tag, attrs = {}, html = ""){ const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v])=> el.setAttribute(k,v)); el.innerHTML = html; return el; }
 
@@ -342,12 +346,14 @@
 
     function updateFactHot(){
       const card = $('#factCard');
-      const hot = $('#factHot');
+      const hot  = $('#factHot');
       const compiled = program.methods.factorial.compiled;
-      hot.textContent = compiled ? 'compiled' : 'interpreted';
-      card.classList.toggle('compiled', compiled);
-      $('#hotness').textContent = compiled ? 'JIT compiled' : 'interpreter';
-      flash($('#jitUnit'), compiled ? 'ok' : 'active', 700);
+      if(hot){ hot.textContent = compiled ? 'compiled' : 'interpreted'; }
+      if(card){ card.classList.toggle('compiled', compiled); }
+      const hotness = $('#hotness');
+      if(hotness){ hotness.textContent = compiled ? 'JIT compiled' : 'interpreter'; }
+      const jitEl = $('#jitUnit');
+      if(jitEl) flash(jitEl, compiled ? 'ok' : 'active', 700);
     }
 
     // --- Scenario steps -----------------------------------------------------
@@ -382,15 +388,21 @@
     }
 
     async function run(){
-      playing = true; $('#play').disabled = true; $('#step').disabled = true;
+      playing = true; isPaused = false; renderNote(); updateControls();
       for(let i=state.step;i<steps.length;i++){
-        if(!playing) break;
+        if(!playing) break; // paused
         await steps[i]();
         state.step = i+1;
       }
+      // If we reached the end naturally, stop and lock controls appropriately
+      if(state.step>=steps.length){ playing = false; isPaused = false; }
+      updateControls();
+      renderNote();
+    }
       $('#play').disabled = state.step>=steps.length;
       $('#step').disabled  = state.step>=steps.length;
       playing = false;
+      renderNote();
     }
 
     // --- State & controls ---------------------------------------------------
@@ -408,10 +420,13 @@
       $('#gcUnit').classList.remove('active','ok');
       program.methods.factorial.hotCount = 0; program.methods.factorial.compiled = false; updateFactHot();
       $('#bytecode').innerHTML = '';
+      isPaused = false; playing = false;
       setNote('Press <strong>Play</strong> or <strong>Step</strong> to begin.');
       state.step = 0; setPC(0);
       renderBytecodeViewer();
-      $('#play').disabled = false; $('#step').disabled = false;
+      const sv = $('#speedVal'); const si = $('#speed'); if(sv && si){ speed = Number(si.value); sv.textContent = speed.toFixed(1)+'×'; }
+      updateControls();
+    }
     }
 
     function renderBytecodeViewer(){
@@ -424,11 +439,44 @@
     }
 
     // Controls
-    $('#play').addEventListener('click', ()=> run());
-    $('#step').addEventListener('click', async ()=>{ if(state.step<steps.length){ await steps[state.step++](); if(state.step>=steps.length){ $('#play').disabled=true; $('#step').disabled=true; } }});
+    function updateControls(){
+      const playBtn = $('#play');
+      if(playBtn){
+        playBtn.textContent = playing ? '⏸ Pause' : '▶ Play';
+        playBtn.disabled = state.step >= steps.length; // disable when finished
+      }
+      const stepBtn = $('#step');
+      if(stepBtn){ stepBtn.disabled = playing || state.step >= steps.length; }
+    }
+
+    $('#play').addEventListener('click', ()=>{
+      if(playing){
+        // Pause
+        playing = false;
+        isPaused = true;
+        updateControls();
+        renderNote();
+      } else {
+        // Play / Resume
+        if(state.step>=steps.length) return; // finished, use Reset
+        isPaused = false;
+        updateControls();
+        run();
+      }
+    });
+
+    $('#step').addEventListener('click', async ()=>{
+      if(state.step<steps.length && !playing){
+        await steps[state.step++]();
+        if(state.step>=steps.length){ isPaused = false; }
+        updateControls();
+        renderNote();
+      }
+    });
+
     $('#reset').addEventListener('click', reset);
     $('#gcNow').addEventListener('click', ()=>{ setNote('Manual GC triggered for demo. In reality, GC schedules based on memory pressure & safepoints.'); markSomeGarbage(); gcSweep(); });
-    $('#speed').addEventListener('input', (e)=>{ speed = Number(e.target.value); });
+    $('#speed').addEventListener('input', (e)=>{ speed = Number(e.target.value); const sv = $('#speedVal'); if(sv) sv.textContent = speed.toFixed(1)+'×'; });
 
     // Initialize
     renderBytecodeViewer();
