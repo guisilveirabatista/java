@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Java HashMap Visualizer</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a33;
+      --panel-2: #0f1730;
+      --text: #e9edf8;
+      --muted: #b7c0d9;
+      --accent: #7aa2f7;
+      --accent-2: #a6da95;
+      --warn: #f3d98c;
+      --danger: #ef8891;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --gap: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      color: var(--text); background: radial-gradient(1200px 800px at 70% -20%, #1a2447 0%, var(--bg) 55%);
+    }
+    header {
+      padding: 22px 24px 8px; position: sticky; top: 0; backdrop-filter: blur(6px);
+      background: linear-gradient(180deg, rgba(11,16,32,.92), rgba(11,16,32,.6) 60%, transparent);
+      border-bottom: 1px solid rgba(122,162,247,.12);
+    }
+    h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: .2px; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+
+    .app {
+      display: grid; grid-template-columns: 480px 1fr; gap: var(--gap);
+      padding: 12px var(--gap) 20px;
+    }
+
+    .card { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid rgba(122,162,247,.16); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .section-title { font-weight: 700; letter-spacing: .25px; font-size: 13px; color: var(--muted); text-transform: uppercase; }
+    .controls { padding: 14px; display: grid; gap: 12px; align-content: start; }
+    .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .control-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 10px 12px; border-radius: 12px; outline: none; border: 1px solid rgba(122,162,247,.24);
+      background: #0b1330; color: var(--text);
+    }
+    input[type="range"] { width: 100%; }
+    .btn {
+      padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(122,162,247,.24);
+      background: linear-gradient(180deg, #12214f, #0e1a43); color: var(--text); cursor: pointer; font-weight: 600; letter-spacing:.2px;
+      transition: transform .05s ease, box-shadow .2s ease; box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .btn:hover { box-shadow: 0 6px 22px rgba(122,162,247,.22); }
+    .btn:active { transform: translateY(1px); }
+    .btn-ghost { background: #0b1330; }
+    .btn-warn { background: linear-gradient(180deg, #3b2e0a, #2c2208); border-color: rgba(243,217,140,.35); color: var(--warn); }
+    .btn-danger { background: linear-gradient(180deg, #3b0e15, #2b0a10); border-color: rgba(239,136,145,.35); color: var(--danger); }
+
+    .grid { padding: 14px; }
+    .grid-inner { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; }
+    .bucket {
+      background: linear-gradient(180deg, #0f1a3b, #0a122c); border: 1px solid rgba(122,162,247,.22);
+      border-radius: 12px; min-height: 84px; padding: 8px; position: relative; overflow: hidden;
+    }
+    .bucket-index { position: absolute; top: 6px; left: 8px; font-size: 11px; color: var(--muted); }
+    .chain { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+    .node { padding: 6px 8px; border-radius: 999px; border: 1px solid rgba(166,218,149,.35); background: rgba(166,218,149,.08); color: var(--text); font-size: 12px; white-space: nowrap; position: relative; }
+    .node .hash { color: var(--muted); font-size: 10px; margin-left: 6px; }
+    .node.flash { outline: 2px solid var(--accent); box-shadow: 0 0 0 4px rgba(122,162,247,.25); }
+    .node.replace { border-color: rgba(122,162,247,.65); background: rgba(122,162,247,.14); }
+    .tree { padding: 6px 8px; border-radius: 12px; border: 1px dashed rgba(122,162,247,.35); background: rgba(122,162,247,.08); font-size: 12px; }
+
+    .legend { display: flex; gap: 10px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+    .badge { padding: 3px 8px; border-radius: 999px; font-size: 11px; border: 1px solid rgba(122,162,247,.3); color: var(--muted); }
+
+    .log { padding: 14px; display: grid; gap: 8px; align-content: start; max-height: 70vh; overflow: auto; }
+    .wh-panel { height: 52vh; overflow: auto; padding-right: 4px; }
+    .log-entry { font-size: 12px; color: var(--text); background: #0b1330; border: 1px solid rgba(122,162,247,.16); border-radius: 10px; padding: 8px 10px; }
+    .faint { color: var(--muted); }
+
+    .stats { display:flex; gap: 10px; flex-wrap: wrap; }
+    .stat { background: #0b1330; border: 1px solid rgba(122,162,247,.16); border-radius: 10px; padding: 8px 10px; font-size: 12px; }
+
+    .toolbar { display:flex; gap: 8px; flex-wrap: wrap; }
+    .row { display:flex; gap: 8px; align-items: end; }
+
+    .hint { font-size: 12px; color: var(--muted); }
+
+    details.help { background: #0b1330; border: 1px solid rgba(122,162,247,.16); border-radius: 12px; padding: 8px 10px; }
+    summary { cursor: pointer; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Java <code>HashMap</code> Visualizer</h1>
+    <div class="subtitle">Interactive, single‑file visualization of buckets, hashing, collisions, and resizing (Java‑style).</div>
+  </header>
+
+  <main class="app">
+    <!-- Controls / What's happening -->
+    <section class="card controls">
+      <div class="section-title">Controls</div>
+
+      <div class="control-row">
+        <div>
+          <label for="key">Key (String or Number)</label>
+          <input id="key" type="text" placeholder="e.g., apple or 42" />
+        </div>
+        <div>
+          <label for="val">Value</label>
+          <input id="val" type="text" placeholder="e.g., red" />
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn" id="btnPut">Put</button>
+        <button class="btn" id="btnGet">Get</button>
+        <button class="btn btn-danger" id="btnRemove">Remove</button>
+        <button class="btn btn-ghost" id="btnRandom">Put random</button>
+        <button class="btn btn-ghost" id="btnDemo">Load demo keys</button>
+        <button class="btn btn-warn" id="btnClear">Clear</button>
+      </div>
+
+      <div class="control-row-3">
+        <div>
+          <label>Capacity (power of 2)</label>
+          <select id="capacity">
+            <option>8</option>
+            <option selected>16</option>
+            <option>32</option>
+            <option>64</option>
+            <option>128</option>
+          </select>
+        </div>
+        <div>
+          <label>Load factor threshold</label>
+          <input id="lf" type="number" step="0.05" min="0.25" max="1.0" value="0.75" />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button class="btn" id="btnResize">Force resize ×2</button>
+        </div>
+      </div>
+
+      <details class="help">
+        <summary>What am I looking at?</summary>
+        <div class="hint">
+          This tool mirrors Java's <code>HashMap</code> concepts:
+          <ul>
+            <li><b>Buckets array</b> (top grid) sized to a power of two.</li>
+            <li><b>Hash mixing</b>: <code>hash = h ^ (h >>> 16)</code> where <code>h</code> is <code>key.hashCode()</code>.</li>
+            <li><b>Indexing</b>: <code>index = (n - 1) &amp; hash</code>.</li>
+            <li><b>Collisions</b>: linked chains in a bucket (treeify hint at length ≥ 8 if capacity ≥ 64).</li>
+            <li><b>Resize</b> when <code>size &gt; threshold</code> (<code>capacity × loadFactor</code>).</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="section-title" style="margin-top:8px;">What's happening</div>
+      <div class="wh-panel" id="log"></div>
+
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <!-- Visualization -->
+    <section class="card grid">
+      <div class="section-title">Buckets &amp; Chains</div>
+      <div class="legend">
+        <span class="badge">Node: <span style="color:var(--accent-2);">(key,value)</span></span>
+        <span class="badge">Hash shown after mixing</span>
+        <span class="badge">Resize threshold = capacity × loadFactor</span>
+      </div>
+      <div id="grid" class="grid-inner"></div>
+    </section>
+  </main>
+
+  <script>
+  // ---------- Utilities: Java-like hashing ----------
+  function toJavaInt32(x){ return x|0; } // force 32-bit signed
+  function unsignedRightShift(x, n){ return (x>>>n); }
+
+  function javaStringHashCode(str){
+    // Java: h = 31*h + c
+    let h = 0;
+    for(let i=0;i<str.length;i++){
+      h = ((h*31)|0) + str.charCodeAt(i);
+      h |= 0; // keep 32-bit
+    }
+    return h|0;
+  }
+
+  function hashOf(key){
+    // Accept numbers, strings. For others, stringify.
+    let h;
+    if(typeof key === 'number' && Number.isFinite(key)){
+      h = toJavaInt32(key);
+    } else if(typeof key === 'string'){
+      h = javaStringHashCode(key);
+    } else {
+      h = javaStringHashCode(JSON.stringify(key));
+    }
+    // spread bits like HashMap: (h ^ (h >>> 16))
+    return (h ^ unsignedRightShift(h,16))|0;
+  }
+
+  // ---------- HashMap model ----------
+  class Node {
+    constructor(hash, key, value, next=null){
+      this.hash = hash|0; this.key = key; this.value = value; this.next = next; // singly linked
+    }
+  }
+
+  class HashMapViz {
+    constructor({capacity=16, loadFactor=0.75, onUpdate=()=>{}}={}){
+      this.capacity = this._ensurePow2(capacity);
+      this.loadFactor = loadFactor;
+      this.table = new Array(this.capacity).fill(null); // array of Node heads
+      this.size = 0;
+      this.onUpdate = onUpdate;
+      this.treeifyHints = new Set(); // bucket indexes that would treeify
+      this._updateStats();
+    }
+    _ensurePow2(n){
+      n = Math.max(1, n|0);
+      // next power of two
+      let p=1; while(p<n) p<<=1; return p;
+    }
+    _indexFor(hash){ return (this.capacity-1) & hash; }
+    _threshold(){ return Math.floor(this.capacity * this.loadFactor); }
+    _updateStats(){
+      this.onUpdate();
+    }
+
+    put(key, value, log){
+      const h = hashOf(key);
+      const idx = this._indexFor(h);
+      log(`PUT key=<b>${escapeHtml(key)}</b>, value=<b>${escapeHtml(value)}</b>`);
+      log(`hashCode mix = <code>${h}</code>, index = <code>${idx}</code>`);
+
+      let head = this.table[idx];
+      if(head==null){
+        this.table[idx] = new Node(h, key, value);
+        this.size++;
+        log(`Bucket ${idx} empty ⇒ insert node.`);
+      } else {
+        log(`Bucket ${idx} occupied ⇒ traverse chain.`);
+        let e = head, last=null, count=0;
+        while(e){
+          count++;
+          if(e.hash===h && equalsKey(e.key,key)){
+            e.value = value; // replace
+            log(`Found existing key ⇒ <b>replace</b> value.`);
+            this._updateStats();
+            return {replaced:true, index:idx};
+          }
+          last = e; e = e.next;
+        }
+        last.next = new Node(h, key, value); // append like Java 8
+        this.size++;
+        log(`No match in chain ⇒ <b>append</b> node at tail.`);
+        if(count+1 >= 8 && this.capacity >= 64){
+          this.treeifyHints.add(idx);
+          log(`<span class="faint">(Hint) Chain length ≥ 8 at capacity ≥ 64 ⇒ would <b>treeify</b> to a red‑black tree in real HashMap.</span>`);
+        }
+      }
+
+      if(this.size > this._threshold()){
+        log(`<b>Size ${this.size}</b> exceeded threshold <b>${this._threshold()}</b> ⇒ <b>resize</b>.`);
+        this.resize(log);
+      }
+
+      this._updateStats();
+      return {replaced:false, index:idx};
+    }
+
+    get(key, log){
+      const h = hashOf(key);
+      const idx = this._indexFor(h);
+      log(`GET key=<b>${escapeHtml(key)}</b> → hash <code>${h}</code> → index <code>${idx}</code>`);
+      let e = this.table[idx]; let steps=0;
+      while(e){
+        steps++;
+        if(e.hash===h && equalsKey(e.key,key)){
+          log(`Match at step ${steps} ⇒ <b>value = ${escapeHtml(e.value)}</b>.`);
+          return e.value;
+        }
+        e = e.next;
+      }
+      log(`Key not found in bucket ${idx}.`);
+      return undefined;
+    }
+
+    remove(key, log){
+      const h = hashOf(key);
+      const idx = this._indexFor(h);
+      log(`REMOVE key=<b>${escapeHtml(key)}</b> → hash <code>${h}</code> → index <code>${idx}</code>`);
+      let e = this.table[idx], prev=null; let steps=0;
+      while(e){
+        steps++;
+        if(e.hash===h && equalsKey(e.key,key)){
+          if(prev==null) this.table[idx] = e.next; else prev.next = e.next;
+          this.size--;
+          log(`Removed at step ${steps}. Size is now <b>${this.size}</b>.`);
+          this._updateStats();
+          return true;
+        }
+        prev = e; e = e.next;
+      }
+      log(`Key not present in bucket ${idx}.`);
+      return false;
+    }
+
+    resize(log){
+      const oldTab = this.table; const oldCap = this.capacity; const oldThr = this._threshold();
+      const newCap = oldCap<<1;
+      this.capacity = newCap;
+      const newTab = new Array(newCap).fill(null);
+      this.table = newTab; this.treeifyHints.clear();
+
+      // In Java 8, nodes either stay at i or move to i+oldCap based on (hash & oldCap)
+      for(let i=0;i<oldCap;i++){
+        let e = oldTab[i]; if(!e) continue;
+        if(!e.next){
+          const ni = (e.hash & (newCap-1));
+          newTab[ni] = e; e.next = null;
+        } else {
+          // split into low/high lists
+          let loHead=null, loTail=null, hiHead=null, hiTail=null;
+          while(e){
+            const next = e.next;
+            if((e.hash & oldCap)===0){
+              if(!loHead){ loHead = e; loTail = e; }
+              else { loTail.next = e; loTail = e; }
+            } else {
+              if(!hiHead){ hiHead = e; hiTail = e; }
+              else { hiTail.next = e; hiTail = e; }
+            }
+            e = next;
+          }
+          if(loTail){ loTail.next = null; newTab[i] = loHead; }
+          if(hiTail){ hiTail.next = null; newTab[i+oldCap] = hiHead; }
+        }
+      }
+      log(`Capacity ${oldCap}→${newCap}. Old threshold ${oldThr} → new threshold ${this._threshold()}.`);
+      this._updateStats();
+    }
+  }
+
+  function equalsKey(a,b){
+    // Java uses equals(). Here we do strict equality for numbers and strings, otherwise deep-ish string compare.
+    if(typeof a === 'string' || typeof a === 'number') return a===b;
+    return JSON.stringify(a)===JSON.stringify(b);
+  }
+
+  // ---------- UI / Rendering ----------
+  let gridEl, logEl, statsEl, capSel, lfEl, keyEl, valEl;
+
+  let map;
+
+  function escapeHtml(v){
+    return String(v).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
+  }
+
+  function log(msg){
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = msg;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function render(){
+    // stats
+    const stats = [
+      `Capacity: <b>${map.capacity}</b>`,
+      `Size: <b>${map.size}</b>`,
+      `Load factor: <b>${map.loadFactor}</b>`,
+      `Threshold: <b>${map._threshold()}</b>`,
+      `Current LF: <b>${(map.size / map.capacity).toFixed(3)}</b>`
+    ];
+    statsEl.innerHTML = stats.map(s=>`<span class="stat">${s}</span>`).join('');
+
+    // grid columns adapt to capacity (max 8 per row)
+    const cols = 8;
+    gridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
+    const frag = document.createDocumentFragment();
+    for(let i=0;i<map.capacity;i++){
+      const bucket = document.createElement('div');
+      bucket.className = 'bucket';
+      const idx = document.createElement('div'); idx.className='bucket-index'; idx.textContent = i;
+      bucket.appendChild(idx);
+
+      const chainEl = document.createElement('div');
+      chainEl.className = 'chain';
+
+      let e = map.table[i];
+      let count = 0;
+      while(e){
+        count++;
+        const n = document.createElement('div'); n.className = 'node';
+        n.innerHTML = `<b>${escapeHtml(e.key)}</b>:${escapeHtml(e.value)} <span class="hash">#${e.hash}</span>`;
+        chainEl.appendChild(n);
+        e = e.next;
+      }
+
+      if(map.treeifyHints.has(i)){
+        const t = document.createElement('div'); t.className='tree';
+        t.innerHTML = `🌳 Treeified bin (hint) — would be red‑black tree in Java`;
+        chainEl.appendChild(t);
+      }
+
+      bucket.appendChild(chainEl);
+      frag.appendChild(bucket);
+    }
+    gridEl.innerHTML = '';
+    gridEl.appendChild(frag);
+  }
+
+  // ---------- Wire up controls ----------
+  document.addEventListener("DOMContentLoaded", function(){
+    gridEl = document.getElementById("grid");
+    logEl = document.getElementById("log");
+    statsEl = document.getElementById("stats");
+    capSel = document.getElementById("capacity");
+    lfEl = document.getElementById("lf");
+    keyEl = document.getElementById("key");
+    valEl = document.getElementById("val");
+
+    map = new HashMapViz({
+      capacity: parseInt(capSel.value,10),
+      loadFactor: parseFloat(lfEl.value),
+      onUpdate: () => {}
+    });
+    map.onUpdate = render;
+    render();
+
+    document.getElementById("btnPut").addEventListener("click", function(){
+      const rawKey = keyEl.value.trim();
+      if(rawKey===""){ log("⚠️ Please enter a <b>key</b> before pressing <b>Put</b>."); keyEl.focus(); return; }
+      const key = parseKey(rawKey);
+      const val = valEl.value.trim();
+      if(val===""){ log("⚠️ Please enter a <b>value</b> for <b>Put</b>."); valEl.focus(); return; }
+      map.put(key, val, log);
+      render();
+    });
+
+    document.getElementById("btnGet").addEventListener("click", function(){
+      const rawKey = keyEl.value.trim();
+      if(rawKey===""){ log("⚠️ Please enter a <b>key</b> before pressing <b>Get</b>."); keyEl.focus(); return; }
+      const key = parseKey(rawKey);
+      const v = map.get(key, log);
+      if(v===undefined) log(`<span class="faint">Result:</span> <b>undefined</b>`); else log(`<span class="faint">Result:</span> <b>${escapeHtml(v)}</b>`);
+    });
+
+    document.getElementById("btnRemove").addEventListener("click", function(){
+      const rawKey = keyEl.value.trim();
+      if(rawKey===""){ log("⚠️ Please enter a <b>key</b> before pressing <b>Remove</b>."); keyEl.focus(); return; }
+      const key = parseKey(rawKey);
+      const ok = map.remove(key, log);
+      log(ok ? `Removed <b>${escapeHtml(key)}</b>.` : `Nothing removed for <b>${escapeHtml(key)}</b>.`);
+    });
+
+    document.getElementById("btnRandom").addEventListener("click", function(){
+      const kv = randomKV(); keyEl.value = kv[0]; valEl.value = kv[1]; map.put(kv[0],kv[1],log); render();
+    });
+
+    document.getElementById("btnDemo").addEventListener("click", function(){
+      const demo = [["apple","red"],["banana","yellow"],["grape","purple"],["melon","green"],["plum","violet"],["pear","green"],["kiwi","brown"],["mango","orange"],["apricot","orange"],["fig","purple"]];
+      for(const pair of demo){ map.put(pair[0],pair[1],log); }
+      render();
+    });
+
+    document.getElementById("btnClear").addEventListener("click", function(){
+      map.table = new Array(map.capacity).fill(null); map.size = 0; map.treeifyHints.clear(); log("Cleared all entries."); render();
+    });
+
+    document.getElementById("btnResize").addEventListener("click", function(){ map.resize(log); });
+
+    capSel.addEventListener("change", function(){
+      const cap = parseInt(capSel.value,10);
+      const entries = collectEntries(map);
+      map.capacity = cap; map.table = new Array(map.capacity).fill(null); map.size = 0; map.treeifyHints.clear();
+      log(`Capacity set to ${cap}. Rehashing ${entries.length} entries ...`);
+      for(const entry of entries){ map.put(entry.key, entry.value, log); }
+      render();
+    });
+
+    lfEl.addEventListener("change", function(){
+      let lf = parseFloat(lfEl.value);
+      if(!Number.isFinite(lf) || lf<=0) lf = 0.75; map.loadFactor = lf; log(`Load factor set to ${lf}. Threshold now ${map._threshold()}.`); render();
+    });
+
+    function parseKey(s){
+      if(s==="") return s;
+      const n = Number(s);
+      return Number.isFinite(n) && String(n) === s ? n : s;
+    }
+
+    function collectEntries(map){
+      const arr = [];
+      for(let i=0;i<map.capacity;i++){ let e = map.table[i]; while(e){ arr.push({key:e.key, value:e.value}); e=e.next; } }
+      return arr;
+    }
+
+    function randomKV(){
+      const words = ["oak","elm","pine","birch","maple","cedar","fir","ash","beech","apple","mango","melon","berry","kiwi","plum","grape","peach","pear","fig"];
+      const k = words[Math.floor(Math.random()*words.length)] + "-" + Math.floor(Math.random()*100);
+      const vals = ["red","green","blue","cyan","magenta","yellow","black","white","teal","orange","violet"];
+      const v = vals[Math.floor(Math.random()*vals.length)];
+      return [k,v];
+    }
+
+    render();
+    log("Ready. Use PUT/GET/REMOVE. Try loading demo keys, then increase capacity or lower the load factor to trigger resizes.");
+  });
+
+  </script>
+</body>
+</html>

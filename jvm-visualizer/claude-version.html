@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java JVM Architecture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .jvm-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .execution-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .flow-step {
+            background: linear-gradient(145deg, #ff6b6b, #ee5a52);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            min-width: 150px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .flow-step:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .flow-step.active {
+            background: linear-gradient(145deg, #4ecdc4, #44a08d);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .arrow {
+            font-size: 2em;
+            color: #ffd93d;
+            align-self: center;
+        }
+
+        .jvm-architecture {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .class-loader {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .runtime-data {
+            display: grid;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .memory-area {
+            background: linear-gradient(145deg, #f093fb, #f5576c);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .memory-area:hover {
+            transform: scale(1.02);
+        }
+
+        .execution-engine {
+            grid-column: 1 / -1;
+            background: linear-gradient(145deg, #43e97b, #38f9d7);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            color: #2c3e50;
+        }
+
+        .component-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .execution-engine .component-title {
+            color: #2c3e50;
+        }
+
+        .component-detail {
+            font-size: 0.9em;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .btn {
+            background: linear-gradient(145deg, #ffd93d, #ff9800);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2c3e50;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .code-example {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid #4ecdc4;
+        }
+
+        .bytecode {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .jvm-architecture {
+                grid-template-columns: 1fr;
+            }
+            
+            .execution-flow {
+                flex-direction: column;
+            }
+            
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Java Virtual Machine (JVM) Architecture</h1>
+        
+        <div class="controls">
+            <button class="btn" onclick="startExecution()">Start Execution Flow</button>
+            <button class="btn" onclick="resetVisualization()">Reset</button>
+        </div>
+
+        <div class="jvm-container">
+            <h2 style="text-align: center; margin-bottom: 30px;">Code to Execution Flow</h2>
+            
+            <div class="execution-flow">
+                <div class="flow-step" id="step1">
+                    <div class="component-title">Java Source</div>
+                    <div class="component-detail">.java files</div>
+                </div>
+                <div class="arrow">→</div>
+                <div class="flow-step" id="step2">
+                    <div class="component-title">Java Compiler</div>
+                    <div class="component-detail">javac</div>
+                </div>
+                <div class="arrow">→</div>
+                <div class="flow-step" id="step3">
+                    <div class="component-title">Bytecode</div>
+                    <div class="component-detail">.class files</div>
+                </div>
+                <div class="arrow">→</div>
+                <div class="flow-step" id="step4">
+                    <div class="component-title">JVM</div>
+                    <div class="component-detail">Execution</div>
+                </div>
+            </div>
+
+            <div class="code-example">
+                <strong>Java Source Code:</strong><br>
+                public class HelloWorld {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;public static void main(String[] args) {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.out.println("Hello, World!");<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                }
+            </div>
+
+            <div class="bytecode" id="bytecodeDisplay" style="display: none;">
+                <strong>Generated Bytecode:</strong><br>
+                0: getstatic     #2  // Field java/lang/System.out<br>
+                3: ldc           #3  // String Hello, World!<br>
+                5: invokevirtual #4  // Method java/io/PrintStream.println<br>
+                8: return
+            </div>
+        </div>
+
+        <div class="jvm-container">
+            <h2 style="text-align: center; margin-bottom: 30px;">JVM Internal Architecture</h2>
+            
+            <div class="jvm-architecture">
+                <div class="class-loader">
+                    <div class="component-title">Class Loader Subsystem</div>
+                    <div class="component-detail">
+                        <strong>Loading:</strong> Finds and loads .class files<br><br>
+                        <strong>Linking:</strong><br>
+                        • Verification: Ensures bytecode is valid<br>
+                        • Preparation: Allocates memory for static variables<br>
+                        • Resolution: Replaces symbolic references<br><br>
+                        <strong>Initialization:</strong> Executes static initializers
+                    </div>
+                </div>
+
+                <div class="runtime-data">
+                    <div class="memory-area" id="methodArea">
+                        <div class="component-title">Method Area</div>
+                        <div class="component-detail">
+                            • Class metadata<br>
+                            • Static variables<br>
+                            • Method bytecode<br>
+                            • Constant pool
+                        </div>
+                    </div>
+
+                    <div class="memory-area" id="heapArea">
+                        <div class="component-title">Heap Memory</div>
+                        <div class="component-detail">
+                            • Object instances<br>
+                            • Instance variables<br>
+                            • Arrays<br>
+                            • Garbage collected
+                        </div>
+                    </div>
+
+                    <div class="memory-area" id="stackArea">
+                        <div class="component-title">Stack Memory</div>
+                        <div class="component-detail">
+                            • Method call frames<br>
+                            • Local variables<br>
+                            • Partial results<br>
+                            • Thread-specific
+                        </div>
+                    </div>
+                </div>
+
+                <div class="execution-engine">
+                    <div class="component-title">Execution Engine</div>
+                    <div class="component-detail">
+                        <strong>Interpreter:</strong> Executes bytecode line by line<br><br>
+                        <strong>Just-In-Time (JIT) Compiler:</strong> Compiles frequently used bytecode to native machine code for better performance<br><br>
+                        <strong>Garbage Collector:</strong> Automatically manages memory by removing unused objects from heap
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        let executionInterval;
+
+        function startExecution() {
+            resetVisualization();
+            currentStep = 0;
+            executionInterval = setInterval(highlightNextStep, 1500);
+        }
+
+        function highlightNextStep() {
+            // Remove active class from all steps
+            document.querySelectorAll('.flow-step').forEach(step => {
+                step.classList.remove('active');
+            });
+
+            currentStep++;
+            
+            if (currentStep <= 4) {
+                const stepElement = document.getElementById(`step${currentStep}`);
+                if (stepElement) {
+                    stepElement.classList.add('active');
+                }
+
+                if (currentStep === 3) {
+                    document.getElementById('bytecodeDisplay').style.display = 'block';
+                }
+
+                if (currentStep === 4) {
+                    // Highlight JVM components
+                    setTimeout(() => {
+                        document.getElementById('methodArea').style.background = 'linear-gradient(145deg, #4ecdc4, #44a08d)';
+                    }, 500);
+                    setTimeout(() => {
+                        document.getElementById('heapArea').style.background = 'linear-gradient(145deg, #4ecdc4, #44a08d)';
+                    }, 1000);
+                    setTimeout(() => {
+                        document.getElementById('stackArea').style.background = 'linear-gradient(145deg, #4ecdc4, #44a08d)';
+                    }, 1500);
+                }
+            } else {
+                clearInterval(executionInterval);
+            }
+        }
+
+        function resetVisualization() {
+            if (executionInterval) {
+                clearInterval(executionInterval);
+            }
+            
+            document.querySelectorAll('.flow-step').forEach(step => {
+                step.classList.remove('active');
+            });
+
+            document.getElementById('bytecodeDisplay').style.display = 'none';
+
+            // Reset memory area colors
+            document.getElementById('methodArea').style.background = 'linear-gradient(145deg, #f093fb, #f5576c)';
+            document.getElementById('heapArea').style.background = 'linear-gradient(145deg, #f093fb, #f5576c)';
+            document.getElementById('stackArea').style.background = 'linear-gradient(145deg, #f093fb, #f5576c)';
+        }
+
+        // Add hover effects for memory areas
+        document.querySelectorAll('.memory-area').forEach(area => {
+            area.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(1.02)';
+            });
+            
+            area.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>
