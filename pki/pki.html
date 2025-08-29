@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKI and Certificates Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #764ba2;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .visualization {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .entity {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .entity::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+        
+        .entity:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        
+        .entity-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .icon {
+            width: 50px;
+            height: 50px;
+            margin-right: 15px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .entity-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .entity-content {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .key-pair {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .key {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .public-key {
+            background: linear-gradient(135deg, #84fab0, #8fd3f4);
+            color: #0a5f5f;
+        }
+        
+        .private-key {
+            background: linear-gradient(135deg, #fa709a, #fee140);
+            color: #8b2c2c;
+        }
+        
+        .key:hover {
+            transform: scale(1.05);
+        }
+        
+        .process-flow {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .process-title {
+            font-size: 1.8em;
+            color: #764ba2;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            align-items: stretch;
+        }
+        
+        .step {
+            flex: 1;
+            min-width: 200px;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .step:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .step-number {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .step-content {
+            margin-top: 10px;
+            color: #555;
+            line-height: 1.5;
+        }
+        
+        .certificate-demo {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .cert-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .cert-field {
+            display: flex;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .cert-field:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        
+        .field-label {
+            font-weight: 600;
+            color: #764ba2;
+            min-width: 150px;
+        }
+        
+        .field-value {
+            color: #666;
+            flex: 1;
+        }
+        
+        .signature-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #ffecd2, #fcb69f);
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .signature-label {
+            font-weight: bold;
+            color: #8b4513;
+            margin-bottom: 10px;
+        }
+        
+        .signature-value {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #654321;
+            word-break: break-all;
+        }
+        
+        .arrow {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 20px solid #764ba2;
+            margin: 20px auto;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .steps {
+                flex-direction: column;
+            }
+            
+            .visualization {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Public Key Infrastructure (PKI)</h1>
+        <p class="subtitle">Understanding Digital Certificates and Trust</p>
+        
+        <div class="visualization">
+            <div class="entity">
+                <div class="entity-header">
+                    <div class="icon">🏛️</div>
+                    <div class="entity-title">Certificate Authority (CA)</div>
+                </div>
+                <div class="entity-content">
+                    Trusted third-party organization that issues and manages digital certificates. Acts as the trust anchor in PKI.
+                    <div class="key-pair">
+                        <div class="key public-key">🔓 CA Public Key</div>
+                        <div class="key private-key">🔒 CA Private Key</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="entity">
+                <div class="entity-header">
+                    <div class="icon">🏢</div>
+                    <div class="entity-title">Web Server</div>
+                </div>
+                <div class="entity-content">
+                    Server requesting a certificate to prove its identity to clients. Generates a key pair for secure communication.
+                    <div class="key-pair">
+                        <div class="key public-key">🔓 Server Public Key</div>
+                        <div class="key private-key">🔒 Server Private Key</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="entity">
+                <div class="entity-header">
+                    <div class="icon">👤</div>
+                    <div class="entity-title">Client/Browser</div>
+                </div>
+                <div class="entity-content">
+                    End user verifying server identity using certificates. Has pre-installed trusted CA certificates.
+                    <div class="key-pair">
+                        <div class="key public-key">🔓 Trusted CA Certs</div>
+                        <div class="key private-key">🔍 Verification Tools</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="process-flow">
+            <h2 class="process-title">Certificate Issuance Process</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <strong>Key Generation</strong><br>
+                        Server generates a public/private key pair
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <strong>CSR Creation</strong><br>
+                        Creates Certificate Signing Request with public key and identity info
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <strong>CA Verification</strong><br>
+                        CA verifies the requester's identity and domain ownership
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <strong>Certificate Signing</strong><br>
+                        CA signs the certificate with its private key
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <strong>Certificate Delivery</strong><br>
+                        Signed certificate sent back to the server
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="arrow"></div>
+        
+        <div class="process-flow">
+            <h2 class="process-title">Certificate Validation Process</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <strong>Certificate Presented</strong><br>
+                        Server sends certificate to client during TLS handshake
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <strong>Signature Verification</strong><br>
+                        Client verifies CA's signature using CA's public key
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <strong>Chain Validation</strong><br>
+                        Verify certificate chain up to trusted root CA
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <strong>Validity Checks</strong><br>
+                        Check expiration date, revocation status, domain match
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <strong>Secure Connection</strong><br>
+                        If valid, establish encrypted connection using server's public key
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="certificate-demo">
+            <div class="cert-header">📜 Example Digital Certificate</div>
+            
+            <div class="cert-field">
+                <span class="field-label">Version:</span>
+                <span class="field-value">X.509 v3</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Serial Number:</span>
+                <span class="field-value">04:7E:CB:E9:FC:A5:5F:7B:D0:9E:AE:36:E1:0C:AE:1E</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Subject:</span>
+                <span class="field-value">CN=www.example.com, O=Example Corp, C=US</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Issuer:</span>
+                <span class="field-value">CN=Trusted CA, O=Certificate Authority Inc, C=US</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Valid From:</span>
+                <span class="field-value">August 1, 2024 00:00:00 GMT</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Valid To:</span>
+                <span class="field-value">August 1, 2025 23:59:59 GMT</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Public Key Algorithm:</span>
+                <span class="field-value">RSA (2048 bits)</span>
+            </div>
+            
+            <div class="cert-field">
+                <span class="field-label">Subject Alt Names:</span>
+                <span class="field-value">www.example.com, example.com, *.example.com</span>
+            </div>
+            
+            <div class="signature-section">
+                <div class="signature-label">CA Digital Signature</div>
+                <div class="signature-value">
+                    3B:E7:9C:42:8A:F3:19:5D:A7:B8:C2:4F:E6:D1:8E:9A:
+                    7F:2C:A3:B5:91:4D:6E:8B:3C:F1:A2:D7:5E:B9:C4:81
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
