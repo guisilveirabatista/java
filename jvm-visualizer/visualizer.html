@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JVM Visualizer — single‑file web app</title>
+  <style>
+    :root{
+      --bg: #0b1020;         /* deep navy */
+      --panel: #121a33;      /* indigo panel */
+      --panel-2:#0f1630;
+      --ink: #eef2ff;        /* soft white */
+      --muted:#a8b3cf;       /* slate */
+      --accent:#7c9cff;      /* blue */
+      --accent-2:#59f;       /* blue alt */
+      --good:#38d39f;        /* green */
+      --warn:#ffc857;        /* amber */
+      --bad:#ff6b6b;         /* red */
+      --chip:#1b2447;        /* chip bg */
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 1200px at 80% -200px, #1a2457 0%, transparent 60%) , var(--bg);
+      color:var(--ink);
+      letter-spacing:.2px;
+    }
+
+    /* Layout */
+    .app{
+      display:grid; grid-template-rows:auto 1fr auto; gap:16px; height:100%;
+      max-width:1400px; margin:0 auto; padding:18px 18px 24px;
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; flex-wrap:wrap;
+    }
+    header h1{font-size:20px; font-weight:700; margin:0; letter-spacing:.3px}
+    header .sub{color:var(--muted); font-size:12px}
+
+    .controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .btn{background:linear-gradient(180deg, #6d86ff, #4b66ff); border:none; color:white; padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer; box-shadow:var(--shadow);}
+    .btn.secondary{background:#1a2550; color:#cfe0ff; box-shadow:none; border:1px solid #25306a}
+    .btn.ghost{background:transparent; border:1px solid #27306a; color:#cfe0ff}
+    .btn:disabled{opacity:.5; cursor:not-allowed}
+    .kbd{background:#0e1533; border:1px solid #242f60; padding:6px 8px; border-radius:10px; color:#cde; font-size:12px}
+
+    .main{
+      display:grid; grid-template-columns:280px 1fr 320px; gap:16px; min-height:0;
+    }
+    .card{background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid #1d2653; border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); min-height:80px; position:relative;}
+    .card h2{margin:0 0 10px; font-size:14px; font-weight:800; text-transform:uppercase; letter-spacing:.9px; color:#dfe6ff}
+    .card .hint{color:var(--muted); font-size:12px;}
+
+    .stack, .heap, .method-area, .engine, .loader, .jni{display:grid; gap:10px}
+    .section-title{font-size:12px; color:#c9d7ff; text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px}
+
+    /* LEFT: Class loader */
+    .loader .stage{display:flex; align-items:center; gap:10px; background:var(--chip); border:1px solid #2a346a; padding:10px; border-radius:12px}
+    .badge{font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid #2a346a; background:#0f1538; color:#cfe0ff}
+    .stage.active{outline:2px solid var(--accent);}
+
+    /* CENTER: Runtime */
+    .runtime-grid{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:minmax(140px, auto); gap:12px}
+    .runtime-grid .wide{grid-column:1 / span 2}
+
+    .heap-area{display:flex; gap:8px; flex-wrap:wrap; align-content:flex-start}
+    .obj{--size:46px; width:var(--size); height:var(--size); border-radius:9px; background:#18235a; border:1px solid #2c3a7f; display:flex; align-items:center; justify-content:center; font-size:10px; color:#cfe0ff; position:relative}
+    .obj .dot{position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--good)}
+    .obj.garbage .dot{background:var(--bad)}
+
+    .method-table{display:grid; grid-template-columns: 1fr; gap:8px}
+    .method{background:#141c44; border:1px solid #26357f; padding:8px; border-radius:10px}
+    .method .hdr{display:flex; align-items:center; justify-content:space-between; font-size:12px; margin-bottom:4px}
+    .method .hdr .hot{color:var(--warn); font-weight:700}
+    .method.compiled{outline:2px solid var(--good)}
+    .bytecode{max-height:138px; overflow:auto; border-radius:8px; border:1px solid #223063}
+    .bytecode li{list-style:none; padding:6px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; color:#cfe}
+    .bytecode li.active{background:#1e2a60}
+
+    .stacks{display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap}
+    .stackcol{flex:1 1 160px}
+    .frames{display:flex; flex-direction:column-reverse; gap:6px; min-height:140px}
+    .frame{background:#121a3f; border:1px solid #2b3b80; border-radius:10px; padding:8px}
+    .frame .title{font-weight:800; font-size:12px}
+    .frame .locals{font-size:11px; color:#bfd0ff}
+
+    /* RIGHT: Engine & notes */
+    .engine .unit{background:#142052; border:1px solid #29377a; padding:10px; border-radius:12px}
+    .unit.active{outline:2px solid var(--accent)}
+    .unit.ok{outline:2px solid var(--good)}
+    .notes{font-size:13px; line-height:1.4}
+    .notes p{margin:.2em 0}
+    .notes .callout{background:#0f173a; border:1px dashed #32428e; padding:10px; border-radius:10px; color:#d6e2ff}
+
+    footer{display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:12px}
+
+    /* Floating token + wires */
+    .token{position:fixed; inset:auto auto 20px 20px; width:28px; height:28px; background:linear-gradient(180deg, #7c9cff, #4b66ff); border-radius:999px; display:flex; align-items:center; justify-content:center; color:white; font-weight:900; font-size:12px; box-shadow: 0 8px 24px rgba(76,102,255,.45); transition: transform .6s ease, opacity .3s ease; pointer-events:none; z-index:999}
+    .token::after{content:attr(data-label); position:absolute; top:-20px; left:50%; transform:translateX(-50%); white-space:nowrap; background:#0d1537; color:#cfe0ff; font-size:10px; padding:2px 6px; border-radius:999px; border:1px solid #27306a}
+    svg#wires{position:absolute; inset:0; pointer-events:none}
+    .wire{stroke:#5671ff; stroke-width:2; stroke-dasharray:6 4; opacity:.7}
+
+    /* Sliders */
+    .row{display:flex; gap:10px; align-items:center}
+    .row label{font-size:12px; color:#cfe}
+    input[type="range"]{accent-color:#6d86ff}
+
+    .pill{display:inline-flex; align-items:center; gap:6px; background:#0e1635; border:1px solid #293875; border-radius:999px; padding:6px 10px; font-size:12px; color:#cfe0ff}
+
+    /* Responsive tweaks */
+    @media (max-width: 1100px){
+      .main{grid-template-columns:1fr;}
+      .runtime-grid{grid-template-columns:1fr;}
+      .runtime-grid .wide{grid-column:auto}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>JVM Visualizer</h1>
+        <div class="sub">A compact, interactive model of how the Java Virtual Machine executes your code</div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="play">▶ Play</button>
+        <button class="btn secondary" id="step">▦ Step</button>
+        <button class="btn ghost" id="reset">↺ Reset</button>
+        <span class="pill"><span>Speed</span> <input id="speed" type="range" min="0.5" max="2.5" value="1" step="0.1"/></span>
+        <button class="btn secondary" id="gcNow">🧹 GC Now</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <!-- LEFT: Class Loading Pipeline -->
+      <div class="card loader" id="loaderCol">
+        <h2>Class Loading</h2>
+        <div class="stage" id="classSource"><span class="badge">.class</span> Class file found</div>
+        <div class="stage" id="classLoader"><span class="badge">Loader</span> Loading & linking</div>
+        <div class="stage" id="verifier"><span class="badge">Verify</span> Bytecode verification</div>
+        <div class="stage" id="initializer"><span class="badge">Init</span> Static init & constants</div>
+        <div class="stage" id="jni"><span class="badge">JNI</span> Native linkage (optional)</div>
+        <div class="hint">The Bootstrap / App / Custom loaders locate classes, verify bytecode safety, then prepare + initialize them.</div>
+      </div>
+
+      <!-- CENTER: Runtime Data Areas -->
+      <div class="card">
+        <h2>Runtime Data Areas</h2>
+        <div class="runtime-grid">
+          <div class="method-area">
+            <div class="section-title">Method Area (metaspace)</div>
+            <div class="method-table" id="methodArea">
+              <!-- methods injected dynamically -->
+            </div>
+          </div>
+          <div class="heap">
+            <div class="section-title">Heap (young/old gen simplified)</div>
+            <div class="heap-area" id="heapArea"></div>
+          </div>
+          <div class="wide stacks">
+            <div class="stackcol card">
+              <div class="section-title">Thread: main</div>
+              <div class="frames" id="mainStack"></div>
+            </div>
+            <div class="stackcol card">
+              <div class="section-title">Bytecode Viewer</div>
+              <div class="method" id="bytecodeCard">
+                <div class="hdr"><span>main(String[])</span> <span class="hot" id="hotness">interpreter</span></div>
+                <ol class="bytecode" id="bytecode"></ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Engine & Notes -->
+      <div class="card engine">
+        <h2>Execution Engine</h2>
+        <div class="unit" id="interpreter"><strong>Interpreter</strong><div class="hint">Decodes bytecodes one by one</div></div>
+        <div class="unit" id="jitUnit"><strong>JIT Compiler</strong><div class="hint">Hot methods compiled to native code</div></div>
+        <div class="unit" id="gcUnit"><strong>Garbage Collector</strong><div class="hint">Reclaims unreachable objects</div></div>
+        <div class="unit" id="osThread"><strong>OS Threads</strong><div class="hint">Java threads map to OS threads</div></div>
+        <div class="card notes" style="margin-top:10px">
+          <h2>What’s happening</h2>
+          <div id="notes" class="callout">Press <strong>Play</strong> or <strong>Step</strong> to watch the JVM load classes, execute bytecode, JIT hot paths, and collect garbage.</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>Made with ❤️ + vanilla JS • single‑file, no external deps</div>
+      <div>Educational & simplified: HotSpot‑style concepts (classloader → interpreter → C1/C2 JIT → GC).</div>
+    </footer>
+
+    <!-- Wires + moving token (for animated flows) -->
+    <svg id="wires"></svg>
+    <div class="token" id="token" data-label=""></div>
+  </div>
+
+  <script>
+    // --- Utilities -----------------------------------------------------------
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    function centerOf(el){
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width/2 + window.scrollX, y: r.top + r.height/2 + window.scrollY };
+    }
+
+    function moveToken(fromEl, toEl, label = ""){
+      const token = $('#token');
+      const from = centerOf(fromEl), to = centerOf(toEl);
+      token.dataset.label = label;
+      token.style.transform = `translate(${from.x-14}px, ${from.y-14}px)`;
+      token.style.opacity = 1;
+      // force layout
+      token.getBoundingClientRect();
+      token.style.transform = `translate(${to.x-14}px, ${to.y-14}px)`;
+    }
+
+    function flash(el, klass = 'active', ms = 700){
+      el.classList.add(klass);
+      setTimeout(()=> el.classList.remove(klass), ms);
+    }
+
+    function setNote(html){ $('#notes').innerHTML = html; }
+
+    function createEl(tag, attrs = {}, html = ""){ const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v])=> el.setAttribute(k,v)); el.innerHTML = html; return el; }
+
+    // --- JVM Model (simplified) --------------------------------------------
+    const methodArea = $('#methodArea');
+    const heapArea   = $('#heapArea');
+    const mainStack  = $('#mainStack');
+
+    let pc = 0; // program counter for our sample main
+    let playing = false;
+    let speed = 1;
+
+    const program = {
+      name: 'Main',
+      methods: {
+        main: {
+          bytecode: [
+            '0: ldc #4          ; push int 4',
+            '1: invokestatic #factorial(I)I',
+            '2: istore_1        ; save result',
+            '3: new #Hello      ; allocate Hello',
+            '4: invokespecial <init>()V',
+            '5: astore_2',
+            '6: return'
+          ],
+        },
+        factorial: {
+          bytecode: [
+            '0: iload_0         ; n',
+            '1: iconst_1',
+            '2: if_icmple L7    ; if n<=1 goto L7',
+            '3: iload_0',
+            '4: iload_0-1',
+            '5: invokestatic #factorial(I)I',
+            '6: imul            ; n * fact(n-1)',
+            '7: ireturn'
+          ],
+          hotCount: 0, compiled: false
+        }
+      }
+    };
+
+    function renderMethodArea(){
+      methodArea.innerHTML = '';
+      // Render class + methods
+      const main = createEl('div', {class:'method'}, `
+        <div class="hdr"><span>${program.name}.main</span><span class="badge">entry</span></div>
+        <ol class="bytecode" id="mainBC"></ol>
+      `);
+      const fact = createEl('div', {class:'method', id:'factCard'}, `
+        <div class="hdr"><span>${program.name}.factorial(int)</span><span class="hot" id="factHot">${program.methods.factorial.compiled ? 'compiled' : 'interpreted'}</span></div>
+        <ol class="bytecode" id="factBC"></ol>
+      `);
+      methodArea.appendChild(main);
+      methodArea.appendChild(fact);
+
+      // Fill bytecode lists
+      const mainBC = $('#mainBC');
+      program.methods.main.bytecode.forEach((line, i)=>{
+        const li = createEl('li', { 'data-pc': i }, line);
+        mainBC.appendChild(li);
+      });
+      const factBC = $('#factBC');
+      program.methods.factorial.bytecode.forEach((line, i)=>{
+        const li = createEl('li', { 'data-pc': i }, line);
+        factBC.appendChild(li);
+      });
+    }
+
+    function setPC(newPc){
+      pc = newPc;
+      // highlight the current instruction in main
+      $$('#mainBC li').forEach(li=> li.classList.toggle('active', Number(li.dataset.pc) === pc));
+    }
+
+    function pushFrame(label, locals){
+      const f = createEl('div', {class:'frame'}, `
+        <div class="title">${label}</div>
+        <div class="locals">${locals || ''}</div>
+      `);
+      mainStack.appendChild(f);
+      flash(f, 'ok', 600);
+      return f;
+    }
+    function popFrame(){
+      const f = mainStack.querySelector('.frame');
+      if(f){ f.remove(); }
+    }
+
+    function allocObject(label, reachable=true){
+      const n = heapArea.children.length+1;
+      const el = createEl('div', {class:'obj', title:label}, `<span>${label}</span><div class="dot"></div>`);
+      if(!reachable){ el.classList.add('garbage'); }
+      heapArea.appendChild(el);
+      return el;
+    }
+
+    function markSomeGarbage(){
+      // mark a random reachable object as garbage (to demonstrate GC)
+      const objs = Array.from(heapArea.querySelectorAll('.obj'));
+      if(objs.length){
+        const idx = Math.floor(Math.random()*objs.length);
+        objs[idx].classList.add('garbage');
+      }
+    }
+
+    function gcSweep(){
+      const garbage = Array.from(heapArea.querySelectorAll('.obj.garbage'));
+      garbage.forEach(g => g.remove());
+      flash($('#gcUnit'), 'ok', 900);
+    }
+
+    function updateFactHot(){
+      const card = $('#factCard');
+      const hot = $('#factHot');
+      const compiled = program.methods.factorial.compiled;
+      hot.textContent = compiled ? 'compiled' : 'interpreted';
+      card.classList.toggle('compiled', compiled);
+      $('#hotness').textContent = compiled ? 'JIT compiled' : 'interpreter';
+      flash($('#jitUnit'), compiled ? 'ok' : 'active', 700);
+    }
+
+    // --- Scenario steps -----------------------------------------------------
+    const steps = [
+      async () => { setNote('The <b>class loader</b> locates <code>Main.class</code>.'); moveToken($('#classSource'), $('#classLoader'), 'Main.class'); flash($('#classLoader')); await sleep(700/speed); },
+      async () => { setNote('Bytecode <b>verification</b> checks stack discipline and types.'); moveToken($('#classLoader'), $('#verifier'), 'verify'); flash($('#verifier')); await sleep(700/speed); },
+      async () => { setNote('<b>Initialization</b>: static fields/constants are prepared.'); moveToken($('#verifier'), $('#initializer'), 'init'); flash($('#initializer')); await sleep(700/speed); },
+      async () => { setNote('Methods are placed into the <b>Method Area</b> (a metaspace).'); moveToken($('#initializer'), methodArea, 'methods'); renderMethodArea(); flash(methodArea); await sleep(700/speed); },
+      async () => { setNote('The OS starts the <b>main</b> Java thread. A stack is created and the entry frame is pushed.'); flash($('#osThread')); pushFrame('Main.main(String[])', 'args: String[]'); setPC(0); await sleep(700/speed); },
+
+      // Execute main bytecode step by step (interpreter)
+      async () => { setNote('Interpreter executes: <b>ldc 4</b> — push literal 4.'); flash($('#interpreter')); setPC(0); program.methods.factorial.hotCount++; highlightFactExecution(); await sleep(600/speed); },
+      async () => { setNote('Call <b>invokestatic factorial</b>. A new frame is pushed with n=4.'); setPC(1); pushFrame('factorial(4)', 'n=4'); program.methods.factorial.hotCount++; highlightFactExecution(); await sleep(900/speed); },
+      async () => { setNote('factorial executes (interpreted). Since n>1, it calls factorial(3).'); pushFrame('factorial(3)', 'n=3'); program.methods.factorial.hotCount++; highlightFactExecution(); await sleep(900/speed); },
+      async () => { setNote('Hot method detected after repeated interpretation. <b>JIT</b> compiles factorial to native code.'); program.methods.factorial.compiled = true; updateFactHot(); await sleep(800/speed); },
+      async () => { setNote('Subsequent recursive calls run as fast <b>compiled</b> native code.'); pushFrame('factorial(2)', 'n=2'); pushFrame('factorial(1)', 'n=1'); await sleep(800/speed); },
+      async () => { setNote('Returning from recursion: frames pop off the stack with results.'); popFrame(); popFrame(); popFrame(); await sleep(800/speed); },
+      async () => { setNote('Result stored with <b>istore_1</b>.'); setPC(2); await sleep(600/speed); },
+      async () => { setNote('Create an object: <b>new Hello</b> then <b>invokespecial &lt;init&gt;</b>.'); setPC(3); const obj = allocObject('Hello'); flash($('#heapArea')); await sleep(900/speed); setPC(4); await sleep(600/speed); setPC(5); await sleep(500/speed); },
+      async () => { setNote('Some temporary objects became unreachable (marked red).'); allocObject('Tmp1'); allocObject('Tmp2'); markSomeGarbage(); markSomeGarbage(); await sleep(600/speed); },
+      async () => { setNote('<b>Garbage Collector</b> runs: unreachable objects are swept.'); flash($('#gcUnit')); gcSweep(); await sleep(900/speed); },
+      async () => { setNote('Method returns: <b>return</b>. Entry frame pops; process exits.'); setPC(6); popFrame(); await sleep(700/speed); },
+      async () => { setNote('<b>Done!</b> You just watched: Loading → Verification → Initialization → Interpretation → JIT → GC. Use <b>Reset</b> to run again.'); await sleep(300/speed); },
+    ];
+
+    function highlightFactExecution(){
+      // Pulse interpreter, but if compiled set JIT pulse
+      if(program.methods.factorial.compiled){ flash($('#jitUnit')); }
+      else { flash($('#interpreter')); }
+      const hot = program.methods.factorial.hotCount;
+      if(hot >= 3 && !program.methods.factorial.compiled){ /* will compile on step 9 */ }
+    }
+
+    async function run(){
+      playing = true; $('#play').disabled = true; $('#step').disabled = true;
+      for(let i=state.step;i<steps.length;i++){
+        if(!playing) break;
+        await steps[i]();
+        state.step = i+1;
+      }
+      $('#play').disabled = state.step>=steps.length;
+      $('#step').disabled  = state.step>=steps.length;
+      playing = false;
+    }
+
+    // --- State & controls ---------------------------------------------------
+    const state = { step: 0 };
+
+    function reset(){
+      // Clear visual state
+      methodArea.innerHTML = '';
+      heapArea.innerHTML = '';
+      mainStack.innerHTML = '';
+      $('#token').style.opacity = 0;
+      $$('#loaderCol .stage').forEach(s=> s.classList.remove('active'));
+      $('#interpreter').classList.remove('active','ok');
+      $('#jitUnit').classList.remove('active','ok');
+      $('#gcUnit').classList.remove('active','ok');
+      program.methods.factorial.hotCount = 0; program.methods.factorial.compiled = false; updateFactHot();
+      $('#bytecode').innerHTML = '';
+      setNote('Press <strong>Play</strong> or <strong>Step</strong> to begin.');
+      state.step = 0; setPC(0);
+      renderBytecodeViewer();
+      $('#play').disabled = false; $('#step').disabled = false;
+    }
+
+    function renderBytecodeViewer(){
+      const bc = $('#bytecode');
+      bc.innerHTML = '';
+      program.methods.main.bytecode.forEach((line,i)=>{
+        bc.appendChild(createEl('li', {'data-pc':i}, line));
+      });
+      setPC(0);
+    }
+
+    // Controls
+    $('#play').addEventListener('click', ()=> run());
+    $('#step').addEventListener('click', async ()=>{ if(state.step<steps.length){ await steps[state.step++](); if(state.step>=steps.length){ $('#play').disabled=true; $('#step').disabled=true; } }});
+    $('#reset').addEventListener('click', reset);
+    $('#gcNow').addEventListener('click', ()=>{ setNote('Manual GC triggered for demo. In reality, GC schedules based on memory pressure & safepoints.'); markSomeGarbage(); gcSweep(); });
+    $('#speed').addEventListener('input', (e)=>{ speed = Number(e.target.value); });
+
+    // Initialize
+    renderBytecodeViewer();
+    reset();
+  </script>
+</body>
+</html>
