@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive HashMap Visualizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls input {
+            padding: 8px;
+            margin: 5px;
+            width: 150px;
+        }
+        .controls button {
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #45a049;
+        }
+        .controls button.remove {
+            background-color: #f44336;
+        }
+        .controls button.remove:hover {
+            background-color: #da190b;
+        }
+        .controls button.search {
+            background-color: #2196F3;
+        }
+        .controls button.search:hover {
+            background-color: #0b7dda;
+        }
+        #visualizer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .bucket {
+            width: 200px;
+            margin: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .bucket-header {
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .entry {
+            background-color: #e7f3ff;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            position: relative;
+        }
+        .entry.highlight {
+            background-color: #ffff99;
+            border: 2px solid #ffcc00;
+        }
+        .arrow {
+            text-align: center;
+            color: #888;
+            margin: 5px 0;
+        }
+        #explanation {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #search-result {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive Java HashMap Visualizer</h1>
+    <div class="controls">
+        <input type="text" id="key" placeholder="Enter key (string)">
+        <input type="text" id="value" placeholder="Enter value">
+        <button onclick="addEntry()">Add</button>
+        <button class="remove" onclick="removeEntry()">Remove</button>
+        <button class="search" onclick="searchEntry()">Search</button>
+        <button onclick="clearHashMap()">Clear</button>
+    </div>
+    <div id="visualizer"></div>
+    <div id="explanation">
+        <p>This visualizer simulates a Java HashMap with 8 buckets for simplicity. Keys are hashed using a simple hash function, and collisions are handled by chaining (linked lists).</p>
+        <p><strong>How it works:</strong></p>
+        <ul>
+            <li><strong>Hashing:</strong> A simple hash code is computed for the key, then index = hash % bucketCount.</li>
+            <li><strong>Insertion:</strong> Add to the linked list in the computed bucket if there's a collision.</li>
+            <li><strong>Search/Remove:</strong> Compute bucket, traverse the chain to find the key.</li>
+            <li><strong>Note:</strong> Real Java HashMap resizes dynamically and may use trees for long chains (Java 8+). This is simplified.</li>
+        </ul>
+        <div id="search-result"></div>
+    </div>
+
+    <script>
+        const bucketCount = 8;
+        let buckets = Array.from({ length: bucketCount }, () => []);
+        let highlightedBucket = -1;
+        let highlightedEntry = null;
+
+        // Simple hash function for strings (mimicking basic hashing)
+        function simpleHash(key) {
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = (hash * 31 + key.charCodeAt(i)) % (2 ** 31);
+            }
+            return hash;
+        }
+
+        function getBucketIndex(key) {
+            const hash = simpleHash(key);
+            return (hash & 0x7FFFFFFF) % bucketCount; // Positive modulo
+        }
+
+        function addEntry() {
+            const key = document.getElementById('key').value.trim();
+            const value = document.getElementById('value').value.trim();
+            if (!key) {
+                alert('Key is required!');
+                return;
+            }
+
+            const index = getBucketIndex(key);
+            const bucket = buckets[index];
+
+            // Check if key already exists, update if so
+            const existing = bucket.find(entry => entry.key === key);
+            if (existing) {
+                existing.value = value;
+            } else {
+                bucket.push({ key, value, hash: simpleHash(key) });
+            }
+
+            renderVisualizer();
+            document.getElementById('key').value = '';
+            document.getElementById('value').value = '';
+        }
+
+        function removeEntry() {
+            const key = document.getElementById('key').value.trim();
+            if (!key) {
+                alert('Key is required!');
+                return;
+            }
+
+            const index = getBucketIndex(key);
+            const bucket = buckets[index];
+            const entryIndex = bucket.findIndex(entry => entry.key === key);
+            if (entryIndex !== -1) {
+                bucket.splice(entryIndex, 1);
+            } else {
+                alert('Key not found!');
+            }
+
+            renderVisualizer();
+            document.getElementById('key').value = '';
+            document.getElementById('value').value = '';
+        }
+
+        function searchEntry() {
+            const key = document.getElementById('key').value.trim();
+            if (!key) {
+                alert('Key is required!');
+                return;
+            }
+
+            const index = getBucketIndex(key);
+            const bucket = buckets[index];
+            const entry = bucket.find(entry => entry.key === key);
+
+            highlightedBucket = index;
+            highlightedEntry = entry ? key : null;
+
+            renderVisualizer();
+
+            const resultDiv = document.getElementById('search-result');
+            if (entry) {
+                resultDiv.innerText = `Found: ${entry.key} = ${entry.value} (in Bucket ${index})`;
+                resultDiv.style.color = 'green';
+            } else {
+                resultDiv.innerText = `Key "${key}" not found!`;
+                resultDiv.style.color = 'red';
+            }
+
+            // Clear highlights after 3 seconds
+            setTimeout(() => {
+                highlightedBucket = -1;
+                highlightedEntry = null;
+                renderVisualizer();
+                resultDiv.innerText = '';
+            }, 3000);
+
+            document.getElementById('key').value = '';
+            document.getElementById('value').value = '';
+        }
+
+        function clearHashMap() {
+            buckets = Array.from({ length: bucketCount }, () => []);
+            renderVisualizer();
+            document.getElementById('search-result').innerText = '';
+        }
+
+        function renderVisualizer() {
+            const visualizer = document.getElementById('visualizer');
+            visualizer.innerHTML = '';
+
+            for (let i = 0; i < bucketCount; i++) {
+                const bucketDiv = document.createElement('div');
+                bucketDiv.className = 'bucket';
+                if (i === highlightedBucket) {
+                    bucketDiv.style.border = '2px solid #ffcc00';
+                }
+
+                const header = document.createElement('div');
+                header.className = 'bucket-header';
+                header.innerText = `Bucket ${i}`;
+                bucketDiv.appendChild(header);
+
+                const bucket = buckets[i];
+                if (bucket.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.innerText = '[empty]';
+                    empty.style.color = '#aaa';
+                    bucketDiv.appendChild(empty);
+                } else {
+                    bucket.forEach((entry, idx) => {
+                        const entryDiv = document.createElement('div');
+                        entryDiv.className = 'entry';
+                        if (entry.key === highlightedEntry) {
+                            entryDiv.classList.add('highlight');
+                        }
+                        entryDiv.innerText = `${entry.key}=${entry.value} (hash: ${entry.hash})`;
+                        bucketDiv.appendChild(entryDiv);
+
+                        if (idx < bucket.length - 1) {
+                            const arrow = document.createElement('div');
+                            arrow.className = 'arrow';
+                            arrow.innerText = '↓';
+                            bucketDiv.appendChild(arrow);
+                        }
+                    });
+                }
+
+                visualizer.appendChild(bucketDiv);
+            }
+        }
+
+        // Initial render
+        renderVisualizer();
+    </script>
+</body>
+</html>
